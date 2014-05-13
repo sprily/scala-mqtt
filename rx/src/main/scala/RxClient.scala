@@ -2,21 +2,24 @@ package uk.co.sprily
 package mqtt
 package rx
 
-import java.util.concurrent.atomic.AtomicBoolean
+import scala.language.higherKinds
 
 import scala.concurrent.Future
+
+import java.util.concurrent.atomic.AtomicBoolean
 
 import _root_.rx.lang.scala.{Observable, Subject}
 
 import com.typesafe.scalalogging.slf4j.Logging
 
-import mqtt.connection.AsyncMqttConnection
+import mqtt.connection.MqttConnection
 
-class RxClient(
-    private val connection: AsyncMqttConnection,
-    private val options: MqttOptions) extends Client[Observable]
+class RxClient[N[+_] : Pure](
+    private val connection: MqttConnection[N],
+    private val options: MqttOptions) extends Client[Observable, N]
                                          with Logging {
 
+  val N = implicitly[Pure[N]]
 
   /** True iff actively trying to connect to the broker.  It may not be 
     * _connected_ (eg. there may be network issues), but it will be attempting
@@ -26,7 +29,7 @@ class RxClient(
     */
   private val active = new AtomicBoolean(false)
 
-  override def connect(): Future[Unit] = {
+  override def connect(): N[Unit] = {
     logger.info("Client received request to connect to MQTT broker.")
     val wasInactive = active.compareAndSet(false, true)
     wasInactive match {
@@ -35,11 +38,11 @@ class RxClient(
         connection.open(options)
       case false =>
         logger.info("Client was already active.")
-        Future.successful({})
+        N.pure({})
     }
   }
 
-  override def disconnect(): Future[Unit] = {
+  override def disconnect(): N[Unit] = {
     logger.info("Client received request to disconnect from MQTT broker.")
     val wasActive = active.compareAndSet(false, true)
     wasActive match {
@@ -48,7 +51,7 @@ class RxClient(
         connection.close()
       case false =>
         logger.info("Client was already inactive.")
-        Future.successful({})
+        N.pure({})
     }
   }
 

@@ -25,13 +25,13 @@ import scala.language.higherKinds
   * initial call to [[uk.co.sprily.mqtt.Client.open()]].
   *
   */
-trait Client[M[+_]] {
+trait Client[M[+_], N[+_]] {
 
   /** Open the connection.
     *
     * This may fail if an initial connection cannot be made.
     */
-  def connect(): Future[Unit]
+  def connect(): N[Unit]
 
   /** Close the connection.
     *
@@ -39,7 +39,7 @@ trait Client[M[+_]] {
     * be re-opened again by calling
     * [[uk.co.sprily.mqtt.Client.open]].
     */
-  def disconnect(): Future[Unit]
+  def disconnect(): N[Unit]
 
   /** A stream of the changing connection status, ie online or offline.
     *
