@@ -31,7 +31,7 @@ trait Client[M[+_]] {
     *
     * This may fail if an initial connection cannot be made.
     */
-  def open(): Future[Unit]
+  def connect(): Future[Unit]
 
   /** Close the connection.
     *
@@ -39,7 +39,7 @@ trait Client[M[+_]] {
     * be re-opened again by calling
     * [[uk.co.sprily.mqtt.Client.open]].
     */
-  def close(): Future[Unit]
+  def disconnect(): Future[Unit]
 
   /** A stream of the changing connection status, ie online or offline.
     *

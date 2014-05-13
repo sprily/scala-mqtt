@@ -16,9 +16,11 @@ object ScalaMqtt extends Build {
 
     // Standardise some common dependencies.
     libraryDependencies ++= Seq(
-      "org.eclipse.paho"       % "mqtt-client"           % "0.4.0",
-      "org.scalacheck"        %% "scalacheck"            % "1.11.1"           % "test",
-      "org.scalatest"         %% "scalatest"             % "2.0"              % "test"
+      "org.eclipse.paho"       % "mqtt-client"                 % "0.4.0",
+      "com.typesafe"          %% "scalalogging-slf4j"          % "1.0.1",
+      "org.scalacheck"        %% "scalacheck"                  % "1.11.1"           % "test",
+      "org.scalatest"         %% "scalatest"                   % "2.0"              % "test",
+      "org.scalamock"         %% "scalamock-scalatest-support" % "3.1.RC1"    % "test"
     ),
 
     testOptions in Test := Seq(Tests.Filter(unitTestFilter)),
