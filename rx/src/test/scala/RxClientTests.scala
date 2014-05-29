@@ -15,8 +15,10 @@ import org.scalamock.scalatest.MockFactory
 
 import _root_.rx.lang.scala.Observable
 
+import scalaz._
+import scalaz.Id._
+
 import mqtt.connection.MqttConnection
-import mqtt.HigherKindImplicits._
 
 class RxClientTests extends FlatSpec with Matchers
                                      with MockFactory {

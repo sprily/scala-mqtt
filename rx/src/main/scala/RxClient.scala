@@ -9,17 +9,20 @@ import scala.concurrent.Future
 import java.util.concurrent.atomic.AtomicBoolean
 
 import _root_.rx.lang.scala.{Observable, Subject}
+import _root_.rx.lang.scala.subjects.BehaviorSubject
 
 import com.typesafe.scalalogging.slf4j.Logging
 
+import scalaz._
+
 import mqtt.connection.MqttConnection
 
-class RxClient[N[+_] : Pure](
+class RxClient[N[+_] : Monad](
     private val connection: MqttConnection[N],
     private val options: MqttOptions) extends Client[Observable, N]
                                          with Logging {
 
-  val N = implicitly[Pure[N]]
+  val N = implicitly[Monad[N]]
 
   /** True iff actively trying to connect to the broker.  It may not be 
     * _connected_ (eg. there may be network issues), but it will be attempting
