@@ -44,7 +44,7 @@ class RxClient[N[+_] : Pure](
 
   override def disconnect(): N[Unit] = {
     logger.info("Client received request to disconnect from MQTT broker.")
-    val wasActive = active.compareAndSet(false, true)
+    val wasActive = active.compareAndSet(true, false)
     wasActive match {
       case true =>
         logger.info("Client was active, closing any connections.")

@@ -32,5 +32,19 @@ class RxClientTests extends FlatSpec with Matchers
     (connection.open _).verify(options).once
   }
 
+  "A mqtt Connection" should "only close connection if active" in {
+    val options = MqttOptions("localhost", 1234)
+    val connection = stub[MqttConnection[Id]]
+
+    val client = new RxClient[Id](connection, options)
+    client.connect()
+
+    client.disconnect()
+    client.disconnect()
+
+    (connection.open _).verify(options).once
+    (connection.close _).verify.once
+  }
+
   private def successfully = {}
 }
