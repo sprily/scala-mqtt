@@ -14,6 +14,7 @@ import _root_.rx.lang.scala.subjects.BehaviorSubject
 import com.typesafe.scalalogging.slf4j.Logging
 
 import scalaz._
+import scalaz.syntax.monad._
 
 import mqtt.connection.MqttConnection
 
@@ -30,7 +31,9 @@ class RxClient[N[+_] : Monad](
     * An inactive client is definitely not connected to the broker, and is
     * making no attempts to re-connect.
     */
-  private val active = new AtomicBoolean(false)
+  private[this] val active = new AtomicBoolean(false)
+
+  private[this] val statusSubject = BehaviorSubject(ConnectionStatus(false))
 
   override def connect(): N[Unit] = {
     logger.info("Client received request to connect to MQTT broker.")
@@ -38,7 +41,7 @@ class RxClient[N[+_] : Monad](
     wasInactive match {
       case true =>
         logger.info("Client was inactive, attempting to open connection to broker.")
-        connection.open(options)
+        connection.open(options) >> N.pure { statusSubject.onNext(ConnectionStatus(true)) }
       case false =>
         logger.info("Client was already active.")
         N.pure({})
@@ -51,16 +54,17 @@ class RxClient[N[+_] : Monad](
     wasActive match {
       case true =>
         logger.info("Client was active, closing any connections.")
-        connection.close()
+        N.pure { statusSubject.onNext(ConnectionStatus(false)) } >> connection.close()
       case false =>
         logger.info("Client was already inactive.")
         N.pure({})
     }
   }
 
+  override def status: Observable[ConnectionStatus] = statusSubject
+
   override def data(): Observable[MqttMessage] = ???
   override def publish(topic: Topic, payload: Array[Byte], qos: QoS, retain: Boolean): Future[Unit] = ???
-  override def status: Observable[ConnectionStatus] = ???
   override protected def data(topics: Seq[TopicPattern]): Observable[MqttMessage] = ???
 
 }
