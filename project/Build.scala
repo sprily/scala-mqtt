@@ -20,6 +20,7 @@ object ScalaMqtt extends Build {
       "com.typesafe"          %% "scalalogging-slf4j"          % "1.0.1",
       "org.scalaz"            %% "scalaz-core"                 % "7.0.6",
       "org.typelevel"         %% "scalaz-contrib-210"          % "0.1.5",
+      "com.typesafe.akka"     %% "akka-actor"                  % "2.3.4",
       "org.scalacheck"        %% "scalacheck"                  % "1.11.1"           % "test",
       "org.scalatest"         %% "scalatest"                   % "2.0"              % "test",
       "org.scalamock"         %% "scalamock-scalatest-support" % "3.1.RC1"          % "test"
