@@ -23,7 +23,7 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
   type MessageHandler = (Topic, MqttMessage) => Unit
   type ConnectionHandler = ConnectionStatus => Unit
 
-  def connect(options: MqttOptions, connHandlers: Seq[ConnectionHandler]=Nil): M[MqttConnection]
+  def connect(options: MqttOptions): M[MqttConnection]
   def disconnect(conn: MqttConnection): M[Unit]
   def publish(conn: MqttConnection,
               topic: Topic,
@@ -32,7 +32,11 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
               retained: Boolean): M[Unit]
   def subscribe(conn: MqttConnection, topics: Seq[TopicPattern], qos: QoS): M[Unit]
   def unsubscribe(conn: MqttConnection, topics: Seq[Topic]): M[Unit]
+
+  /** Notifications of incoming messages **/
   def attachMessageHandler(conn: MqttConnection, callback: MessageHandler): HandlerToken
+
+  /** Notifications of the connection status **/
   def attachConnectionHandler(conn: MqttConnection, callback: ConnectionHandler): HandlerToken
 
 

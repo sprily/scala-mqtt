@@ -22,8 +22,7 @@ object ScalaMqtt extends Build {
       "org.typelevel"         %% "scalaz-contrib-210"          % "0.1.5",
       "com.typesafe.akka"     %% "akka-actor"                  % "2.3.4",
       "org.scalacheck"        %% "scalacheck"                  % "1.11.1"           % "test",
-      "org.scalatest"         %% "scalatest"                   % "2.0"              % "test",
-      "org.scalamock"         %% "scalamock-scalatest-support" % "3.1.RC1"          % "test"
+      "org.scalatest"          % "scalatest_2.10"              % "2.2.1"            % "test"
     ),
 
     testOptions in Test := Seq(Tests.Filter(unitTestFilter)),
