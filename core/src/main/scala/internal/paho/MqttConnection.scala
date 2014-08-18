@@ -20,6 +20,7 @@ import org.eclipse.paho.client.{mqttv3 => paho}
 protected[mqtt] object PahoMqttConnection extends PahoMqttConnectionModule
 
 protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Future]
+                                                  with DefaultConnectionHandling[Future]
                                                   with StrictLogging { self =>
 
   import scala.concurrent.ExecutionContext.Implicits.global
@@ -56,14 +57,10 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
   }
 
   class MqttConnection(clientFactory: => paho.IMqttAsyncClient,
-                       options: paho.MqttConnectOptions) {
+                       options: paho.MqttConnectOptions) extends ConnectionHandling {
 
     private[this] val client = {
       new AtomicReference[paho.IMqttAsyncClient](null)
-    }
-
-    private[this] val connectionHandlers = {
-      new AtomicReference[List[ConnectionHandler]](Nil)
     }
 
     private[paho] def closeConnection(): Future[Unit] = {
@@ -84,22 +81,6 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     private[paho] def initialiseConnection(): Future[Unit] = {
       logger.debug("Initialising connection")
       ifInactive { connectWith(_) }
-    }
-
-    private[paho] def registerConnectionHandler(h: ConnectionHandler): HandlerToken = {
-      val token = new HandlerToken {
-        def cancel(): Unit = {
-          connectionHandlers.update { handlers =>
-            handlers.filter(_ != h)
-          }
-        }
-      }
-
-      connectionHandlers.update { handlers =>
-        h :: handlers
-      }
-
-      token
     }
 
     @annotation.tailrec
@@ -133,10 +114,6 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
         case Success(_) => notifyConnectionHandlers(ConnectionStatus(true))
         case Failure(_) => notifyConnectionHandlers(ConnectionStatus(false))
       }
-    }
-
-    private[this] def notifyConnectionHandlers(status: ConnectionStatus): Unit = {
-      connectionHandlers.get.foreach { h => h(status) }
     }
 
     private[this] def handleUnintendedDisconnection(delay: FiniteDuration = 0.seconds): Future[Unit] = {
@@ -209,8 +186,6 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
 
   }
 
-  trait HandlerToken extends HandlerTokenLike
-
   implicit class MqttOptionsPahoOps(val options: MqttOptions) {
     def pahoConnectOptions: paho.MqttConnectOptions = {
       val pOpts = new paho.MqttConnectOptions()
@@ -218,17 +193,4 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       pOpts
     }
   }
-
-  implicit class AtomicOps[T](val ref: AtomicReference[T]) {
-    @annotation.tailrec
-    final def update(f: T => T): (T,T) = {
-      val oldT = ref.get
-      val newT = f(oldT)
-      ref.compareAndSet(oldT, newT) match {
-        case true  => (oldT, newT)
-        case false => update(f)
-      }
-    }
-  }
-
 }
