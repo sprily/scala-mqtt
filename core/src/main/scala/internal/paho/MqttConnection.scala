@@ -7,6 +7,9 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.concurrent.{Future, future, Promise, promise}
 import scala.concurrent.duration._
+import scala.util.Success
+
+import com.typesafe.scalalogging.slf4j.StrictLogging
 
 import scalaz._
 import scalaz.contrib.std.scalaFuture._
@@ -16,7 +19,8 @@ import org.eclipse.paho.client.{mqttv3 => paho}
 
 protected[mqtt] object PahoMqttConnection extends PahoMqttConnectionModule
 
-protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Future] { self =>
+protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Future]
+                                                  with StrictLogging { self =>
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -57,9 +61,11 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     }
 
     private[paho] def closeConnection(): Future[Unit] = {
+      logger.debug("Attempting to close connection to broker.")
       ifActive { c =>
         val p = promise[Unit]
 
+        logger.debug(s"Closing connection.  Underlying connection was open: ${c.isConnected}")
         c.isConnected match {
           case false => p.success(())
           case true  => c.disconnect(null, promiseAL(p))
@@ -70,51 +76,62 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     }
 
     private[paho] def initialiseConnection(): Future[Unit] = {
-      ifInactive { c =>
-        c.setCallback(new paho.MqttCallback() {
-          def connectionLost(t: Throwable): Unit = handleUnintendedDisconnection()
-          def deliveryComplete(token: paho.IMqttDeliveryToken): Unit = println("Delivery Complete")
-          def messageArrived(topic: String, msg: paho.MqttMessage): Unit = println("Msg Arrived")
-        })
-
-        // connect...
-        val p = promise[Unit]
-        c.connect(options, null, promiseAL(p))
-        p.future
-      }
+      logger.debug("Initialising connection")
+      ifInactive { connectWith(_) }
     }
 
     @annotation.tailrec
     private[this] def reconnect(): Future[Unit] = {
+      logger.debug("Attempting to re-connect to broker")
       val oldClient = client.get
       if(oldClient == null) {
         Future.failed(new IllegalStateException("Active connection required"))
       } else {
         val newClient = clientFactory
         if (client.compareAndSet(oldClient, newClient)) {
-          newClient.setCallback(new paho.MqttCallback() {
-            def connectionLost(t: Throwable): Unit = handleUnintendedDisconnection()
-            def deliveryComplete(token: paho.IMqttDeliveryToken): Unit = println("Delivery Complete")
-            def messageArrived(topic: String, msg: paho.MqttMessage): Unit = println("Msg Arrived")
-          })
-
-          // connect...
-          val p = promise[Unit]
-          newClient.connect(options, null, promiseAL(p))
-          p.future
+          connectWith(newClient)
         } else {
           reconnect()
         }
       }
     }
 
+    private[this] def connectWith(c: paho.IMqttAsyncClient): Future[Unit] = {
+      logger.debug("Setting up connection callbacks")
+      c.setCallback(new paho.MqttCallback() {
+        def connectionLost(t: Throwable): Unit = handleUnintendedDisconnection()
+        def deliveryComplete(token: paho.IMqttDeliveryToken): Unit = println("Delivery Complete")
+        def messageArrived(topic: String, msg: paho.MqttMessage): Unit = println("Msg Arrived")
+      })
+
+      logger.debug("Calling connect() on underlying client")
+      val p = promise[Unit]
+      c.connect(options, null, promiseAL(p))
+      p.future
+    }
+
     private[this] def handleUnintendedDisconnection(delay: FiniteDuration = 0.seconds): Future[Unit] = {
-      println("Handling disconnection")
+
+      logger.info("Handling unexpected disconnection from MQTT broker")
+      logger.debug(s"Sleeping for ${delay} before attempting initial re-connection")
       Thread.sleep(delay.toMillis)
-      println("Finished sleeping")
-      reconnect().recoverWith {
-        case e: IllegalStateException => println("ISE: " + e) ; future { }
-        case e: Exception => println("Recovering from " + e) ; handleUnintendedDisconnection(5.seconds)
+
+      def reAttempt(): Future[Unit] = {
+        reconnect().recoverWith {
+          case e: IllegalStateException => {
+            logger.debug("Re-connection halted as the connection is now inactive")
+            future { }
+          }
+          case e: paho.MqttException => {
+            logger.debug(s"Re-connection attempt failed: ${e}")
+            Thread.sleep(5.seconds.toMillis)
+            reAttempt()
+          }
+        }
+      }
+
+      reAttempt().andThen {
+        case Success(_) => logger.info("Successfully re-connected to broker")
       }
     }
 
@@ -149,7 +166,8 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     private[this] def promiseAL(p: Promise[Unit]) = new paho.IMqttActionListener {
       def onSuccess(token: paho.IMqttToken): Unit = {
         if (p.isCompleted) {
-          println(s"Promise already completed, ignoring...")
+          // paho client will call callback twice on some occasions
+          logger.warn("Promise is already completed, ignoring...")
         } else {
           p.success(())
         }
