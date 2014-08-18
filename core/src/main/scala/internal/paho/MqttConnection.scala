@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.concurrent.{Future, future, Promise, promise}
 import scala.concurrent.duration._
-import scala.util.Success
+import scala.util.{Failure, Success}
 
 import com.typesafe.scalalogging.slf4j.StrictLogging
 
@@ -51,13 +51,19 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
   def attachMessageHandler(conn: MqttConnection, callback: MessageHandler): HandlerToken = ???
 
   /** Notifications of the connection status **/
-  def attachConnectionHandler(conn: MqttConnection, callback: ConnectionHandler): HandlerToken = ???
+  def attachConnectionHandler(conn: MqttConnection, callback: ConnectionHandler): HandlerToken = {
+    conn.registerConnectionHandler(callback)
+  }
 
   class MqttConnection(clientFactory: => paho.IMqttAsyncClient,
                        options: paho.MqttConnectOptions) {
 
     private[this] val client = {
       new AtomicReference[paho.IMqttAsyncClient](null)
+    }
+
+    private[this] val connectionHandlers = {
+      new AtomicReference[List[ConnectionHandler]](Nil)
     }
 
     private[paho] def closeConnection(): Future[Unit] = {
@@ -78,6 +84,22 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     private[paho] def initialiseConnection(): Future[Unit] = {
       logger.debug("Initialising connection")
       ifInactive { connectWith(_) }
+    }
+
+    private[paho] def registerConnectionHandler(h: ConnectionHandler): HandlerToken = {
+      val token = new HandlerToken {
+        def cancel(): Unit = {
+          connectionHandlers.update { handlers =>
+            handlers.filter(_ != h)
+          }
+        }
+      }
+
+      connectionHandlers.update { handlers =>
+        h :: handlers
+      }
+
+      token
     }
 
     @annotation.tailrec
@@ -107,11 +129,19 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       logger.debug("Calling connect() on underlying client")
       val p = promise[Unit]
       c.connect(options, null, promiseAL(p))
-      p.future
+      p.future.andThen {
+        case Success(_) => notifyConnectionHandlers(ConnectionStatus(true))
+        case Failure(_) => notifyConnectionHandlers(ConnectionStatus(false))
+      }
+    }
+
+    private[this] def notifyConnectionHandlers(status: ConnectionStatus): Unit = {
+      connectionHandlers.get.foreach { h => h(status) }
     }
 
     private[this] def handleUnintendedDisconnection(delay: FiniteDuration = 0.seconds): Future[Unit] = {
 
+      notifyConnectionHandlers(ConnectionStatus(false))
       logger.info("Handling unexpected disconnection from MQTT broker")
       logger.debug(s"Sleeping for ${delay} before attempting initial re-connection")
       Thread.sleep(delay.toMillis)
@@ -179,11 +209,25 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
 
   }
 
+  trait HandlerToken extends HandlerTokenLike
+
   implicit class MqttOptionsPahoOps(val options: MqttOptions) {
     def pahoConnectOptions: paho.MqttConnectOptions = {
       val pOpts = new paho.MqttConnectOptions()
       pOpts setCleanSession(options.cleanSession)
       pOpts
+    }
+  }
+
+  implicit class AtomicOps[T](val ref: AtomicReference[T]) {
+    @annotation.tailrec
+    final def update(f: T => T): (T,T) = {
+      val oldT = ref.get
+      val newT = f(oldT)
+      ref.compareAndSet(oldT, newT) match {
+        case true  => (oldT, newT)
+        case false => update(f)
+      }
     }
   }
 

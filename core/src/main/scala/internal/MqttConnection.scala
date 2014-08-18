@@ -23,6 +23,10 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
   type MessageHandler = (Topic, MqttMessage) => Unit
   type ConnectionHandler = ConnectionStatus => Unit
 
+  trait HandlerTokenLike {
+    def cancel(): Unit
+  }
+
   def connect(options: MqttOptions): M[MqttConnection]
   def disconnect(conn: MqttConnection): M[Unit]
   def publish(conn: MqttConnection,
@@ -38,11 +42,6 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
 
   /** Notifications of the connection status **/
   def attachConnectionHandler(conn: MqttConnection, callback: ConnectionHandler): HandlerToken
-
-
-  trait HandlerTokenLike {
-    def cancel(): Unit
-  }
 
   /**
    * Infix operators delegate to module functions.
