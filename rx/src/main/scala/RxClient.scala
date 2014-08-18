@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import _root_.rx.lang.scala.{Observable, Subject}
 import _root_.rx.lang.scala.subjects.BehaviorSubject
 
-import com.typesafe.scalalogging.slf4j.Logging
+//import com.typesafe.scalalogging.slf4j.Logging
 
 import scalaz._
 import scalaz.syntax.monad._
