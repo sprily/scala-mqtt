@@ -53,14 +53,20 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
 
   /** Notifications of the connection status **/
   def attachConnectionHandler(conn: MqttConnection, callback: ConnectionHandler): HandlerToken = {
-    conn.registerConnectionHandler(callback)
+    conn.attachConnectionHandler(callback)
   }
 
   class MqttConnection(clientFactory: => paho.IMqttAsyncClient,
-                       options: paho.MqttConnectOptions) extends ConnectionHandling {
+                       options: paho.MqttConnectOptions) {
+
+    val connectionSubscriptions = new NotificationHandler[ConnectionStatus]()
 
     private[this] val client = {
       new AtomicReference[paho.IMqttAsyncClient](null)
+    }
+
+    def attachConnectionHandler(callback: ConnectionHandler): HandlerToken = {
+      connectionSubscriptions.register(callback)
     }
 
     private[paho] def closeConnection(): Future[Unit] = {
@@ -111,14 +117,14 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       val p = promise[Unit]
       c.connect(options, null, promiseAL(p))
       p.future.andThen {
-        case Success(_) => notifyConnectionHandlers(ConnectionStatus(true))
-        case Failure(_) => notifyConnectionHandlers(ConnectionStatus(false))
+        case Success(_) => connectionSubscriptions.notify(ConnectionStatus(true))
+        case Failure(_) => connectionSubscriptions.notify(ConnectionStatus(false))
       }
     }
 
     private[this] def handleUnintendedDisconnection(delay: FiniteDuration = 0.seconds): Future[Unit] = {
 
-      notifyConnectionHandlers(ConnectionStatus(false))
+      connectionSubscriptions.notify(ConnectionStatus(false))
       logger.info("Handling unexpected disconnection from MQTT broker")
       logger.debug(s"Sleeping for ${delay} before attempting initial re-connection")
       Thread.sleep(delay.toMillis)
