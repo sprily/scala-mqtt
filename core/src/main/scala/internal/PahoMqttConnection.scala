@@ -2,8 +2,6 @@ package uk.co.sprily
 package mqtt
 package internal
 
-import java.util.concurrent.atomic.AtomicReference
-
 import scala.concurrent.{Future, future, Promise, promise}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
