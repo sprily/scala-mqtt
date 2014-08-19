@@ -149,7 +149,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       * This includes the initial connection, as well as any subsequent
       * disconnections.
       */
-    private[internal] def handleClientConnected() = {
+    private[this] def handleClientConnected() = {
       logger.info("Connected to MQTT broker")
       connectionStatusSubscriptions.notify(ConnectionStatus(true))
     }
@@ -157,7 +157,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     /**
       * Called whenever the underlying connection is lost unexpectedly.
       */
-    private[internal] def handleUnexpectedDisconnect() = {
+    private[this] def handleUnexpectedDisconnect() = {
       logger.warn("Unexpected disconnection from MQTT broker")
       connectionStatusSubscriptions.notify(ConnectionStatus(false))
       reconnect() andThen {
@@ -170,7 +170,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       * Fails if the connection is de-activated in the mean time, otherwise
       * it just plugging away at it.
       */
-    private[internal] def reconnect(): Future[Unit] = {
+    private[this] def reconnect(): Future[Unit] = {
         connect() recoverWith {
           case e: paho.MqttException => {
             logger.debug(s"Re-connection attempt failed: ${e}")
