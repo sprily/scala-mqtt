@@ -1,8 +1,6 @@
 package uk.co.sprily
 package mqtt
 
-import scala.concurrent.{Future}
-
 import scala.language.higherKinds
 
 /** A connection to an MQTT broker for subscribtion and publication of data.
@@ -113,7 +111,7 @@ trait Client[M[+_], N[+_]] {
   def publish(topic: Topic,
               payload: Array[Byte],
               qos: QoS = AtLeastOnce,
-              retain: Boolean = false): Future[Unit]
+              retain: Boolean = false): N[Unit]
 
 }
 
