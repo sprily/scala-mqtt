@@ -27,16 +27,17 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
 
   override implicit def M = implicitly[Monad[Future]]
 
-  def connect(options: MqttOptions): Future[MqttConnection] = {
+  def connectWithHandler(options: MqttOptions,
+                         callbacks: Seq[ConnectionHandler]) = {
     val client = new MqttConnection(
                   new paho.MqttAsyncClient(s"tcp://${options.host}:${options.port}",
                                            options.clientId.s),
                   options.pahoConnectOptions)
 
-    client.initialiseConnection().map { _ => client }
+    client.initialiseConnection().map { _ => (client, Nil) }
   }
 
-  def disconnect(conn: MqttConnection): Future[Unit] = {
+  def disconnect(conn: MqttConnection, quiesce: FiniteDuration = 30.seconds): Future[Unit] = {
     conn.closeConnection()
   }
 
