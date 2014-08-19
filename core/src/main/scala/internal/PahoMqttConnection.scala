@@ -32,8 +32,9 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
                   new paho.MqttAsyncClient(s"tcp://${options.host}:${options.port}",
                                            options.clientId.s),
                   options.pahoConnectOptions)
+    val tokens = callbacks.map(client.attachConnectionHandler(_))
 
-    client.initialiseConnection().map { _ => (client, Nil) }
+    client.initialiseConnection().map { _ => (client, tokens) }
   }
 
   def disconnect(conn: MqttConnection, quiesce: FiniteDuration = 30.seconds): Future[Unit] = {
