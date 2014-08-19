@@ -13,7 +13,6 @@ import com.typesafe.scalalogging.slf4j.StrictLogging
 import scalaz._
 import scalaz.contrib.std.scalaFuture._
 
-// WARNING: this shadows uk.co.sprily.mqtt.internal.paho
 import org.eclipse.paho.client.{mqttv3 => paho}
 
 protected[mqtt] object PahoMqttConnection extends PahoMqttConnectionModule
@@ -23,176 +22,225 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
                                                   with StrictLogging { self =>
 
   import scala.concurrent.ExecutionContext.Implicits.global
-
   override implicit def M = implicitly[Monad[Future]]
 
-  def connectWithHandler(options: MqttOptions,
-                         callbacks: Seq[ConnectionHandler]) = {
+  /** Module public interface **/
+
+  override def connectWithHandler(options: MqttOptions,
+                                  callbacks: Seq[ConnectionHandler]) = {
     val client = new MqttConnection(
-                  new paho.MqttAsyncClient(s"tcp://${options.host}:${options.port}",
-                                           options.clientId.s),
+                  new RestrictedPahoInterfaceImpl(
+                    new paho.MqttAsyncClient(s"tcp://${options.host}:${options.port}",
+                                             options.clientId.s)),
                   options.pahoConnectOptions)
     val tokens = callbacks.map(client.attachConnectionHandler(_))
 
     client.initialiseConnection().map { _ => (client, tokens) }
   }
 
-  def disconnect(conn: MqttConnection, quiesce: FiniteDuration = 30.seconds): Future[Unit] = {
-    conn.closeConnection()
+  override def disconnect(conn: MqttConnection,
+                          quiesce: FiniteDuration = 30.seconds) = conn.disconnect()
+
+  override def publish(conn: MqttConnection,
+                       topic: Topic,
+                       payload: Seq[Byte],
+                       qos: QoS,
+                       retained: Boolean) = conn.publish(topic, payload, qos, retained)
+
+  override def subscribe(conn: MqttConnection,
+                         topics: Seq[TopicPattern],
+                         qos: QoS) = conn.subscribe(topics, qos)
+
+  override def unsubscribe(conn: MqttConnection,
+                           topics: Seq[Topic]) = conn.unsubscribe(topics)
+
+  override def attachMessageHandler(conn: MqttConnection,
+                                    callback: MessageHandler) = {
+    conn.attachMessageHandler(callback)
   }
 
-  def publish(conn: MqttConnection,
-              topic: Topic,
-              payload: Seq[Byte],
-              qos: QoS,
-              retained: Boolean): Future[Unit] = ???
-  def subscribe(conn: MqttConnection, topics: Seq[TopicPattern], qos: QoS): Future[Unit] = ???
-  def unsubscribe(conn: MqttConnection, topics: Seq[Topic]): Future[Unit] = ???
-
-  /** Notifications of incoming messages **/
-  def attachMessageHandler(conn: MqttConnection, callback: MessageHandler): HandlerToken = ???
-
-  /** Notifications of the connection status **/
-  def attachConnectionHandler(conn: MqttConnection, callback: ConnectionHandler): HandlerToken = {
+  override def attachConnectionHandler(conn: MqttConnection,
+                                       callback: ConnectionHandler) = {
     conn.attachConnectionHandler(callback)
   }
 
-  class MqttConnection(clientFactory: => paho.IMqttAsyncClient,
-                       options: paho.MqttConnectOptions) {
+  class MqttConnection(client: RestrictedPahoInterface,
+                       options: paho.MqttConnectOptions) extends paho.MqttCallback {
 
-    val connectionSubscriptions = new NotificationHandler[ConnectionStatus]()
+    @volatile private[this] var active = false
+    private[this] val connLock = new AnyRef {}
+    private[this] val connectionStatusSubscriptions = new NotificationHandler[ConnectionStatus]()
 
-    private[this] val client = {
-      new AtomicReference[paho.IMqttAsyncClient](null)
-    }
-
-    def attachConnectionHandler(callback: ConnectionHandler): HandlerToken = {
-      connectionSubscriptions.register(callback)
-    }
-
-    private[internal] def closeConnection(): Future[Unit] = {
-      logger.debug("Attempting to close connection to broker.")
-      ifActive { c =>
-        val p = promise[Unit]
-
-        logger.debug(s"Closing connection.  Underlying connection was open: ${c.isConnected}")
-        c.isConnected match {
-          case false => p.success(())
-          case true  => c.disconnect(null, promiseAL(p))
-        }
-
-        p.future
-      }
-    }
-
-    private[internal] def initialiseConnection(): Future[Unit] = {
-      logger.debug("Initialising connection")
-      ifInactive { connectWith(_) }
-    }
-
-    @annotation.tailrec
-    private[this] def reconnect(): Future[Unit] = {
-      logger.debug("Attempting to re-connect to broker")
-      val oldClient = client.get
-      if(oldClient == null) {
-        Future.failed(new IllegalStateException("Active connection required"))
-      } else {
-        val newClient = clientFactory
-        if (client.compareAndSet(oldClient, newClient)) {
-          connectWith(newClient)
+    def disconnect(quiesce: FiniteDuration = 30.seconds) = {
+      connLock.synchronized {
+        if (!active) {
+          Future.failed(new InactiveConnectionException())
         } else {
-          reconnect()
+          logger.debug("De-activating MqttConnection")
+          active = false
+
+          val disconnect = {
+            try {
+              val p = promise[Unit]
+              client.disconnect(quiesce.toMillis, promiseAL(p))
+              p.future
+            } catch {
+              case e: paho.MqttException if alreadyDisconnected(e) => Future.successful({})
+              case e: Exception => Future.failed(e)
+            }
+          }
+
+          disconnect andThen {
+            case _ => client.close()
+          }
         }
       }
     }
 
-    private[this] def connectWith(c: paho.IMqttAsyncClient): Future[Unit] = {
-      logger.debug("Setting up connection callbacks")
-      c.setCallback(new paho.MqttCallback() {
-        def connectionLost(t: Throwable): Unit = handleUnintendedDisconnection()
-        def deliveryComplete(token: paho.IMqttDeliveryToken): Unit = println("Delivery Complete")
-        def messageArrived(topic: String, msg: paho.MqttMessage): Unit = println("Msg Arrived")
-      })
+    def publish(topic: Topic,
+                payload: Seq[Byte],
+                qos: QoS,
+                retained: Boolean) = ???
 
-      logger.debug("Calling connect() on underlying client")
-      val p = promise[Unit]
-      c.connect(options, null, promiseAL(p))
-      p.future.andThen {
-        case Success(_) => connectionSubscriptions.notify(ConnectionStatus(true))
-        case Failure(_) => connectionSubscriptions.notify(ConnectionStatus(false))
+    def subscribe(topics: Seq[TopicPattern], qos: QoS) = ???
+    def unsubscribe(topics: Seq[Topic]) = ???
+    def attachMessageHandler(callback: MessageHandler) = ???
+    def attachConnectionHandler(callback: ConnectionHandler) = ???
+
+    /** Connect for the first time.  Fails early **/
+    private[internal] def initialiseConnection(): Future[Unit] = {
+      connLock.synchronized {
+        if (active) {
+          Future.failed(new ActiveConnectionException())
+        } else {
+          logger.debug("Activating MqttConnection")
+          active = true
+          client.setCallback(this)
+          
+          connect() andThen {
+            case Success(_) => handleClientConnected()
+          }
+        }
       }
     }
 
-    private[this] def handleUnintendedDisconnection(delay: FiniteDuration = 0.seconds): Future[Unit] = {
-
-      connectionSubscriptions.notify(ConnectionStatus(false))
-      logger.info("Handling unexpected disconnection from MQTT broker")
-      logger.debug(s"Sleeping for ${delay} before attempting initial re-connection")
-      Thread.sleep(delay.toMillis)
-
-      def reAttempt(): Future[Unit] = {
-        reconnect().recoverWith {
-          case e: IllegalStateException => {
-            logger.debug("Re-connection halted as the connection is now inactive")
-            future { }
+    /** Connect to the broker.
+      *
+      * Fails if the connection is still active or if the connection
+      * attempt itself fails.
+      */
+    private[this] def connect(): Future[Unit] = {
+      connLock.synchronized {
+        if (!active) {
+          Future.failed(new InactiveConnectionException())
+        } else {
+          try {
+            val p = promise[Unit]
+            client.connect(options, promiseAL(p))
+            p.future
+          } catch {
+            case e: Exception => Future.failed(e)
           }
+        }
+      }
+    }
+
+    /**
+      * Called whenever the underlying connection is successfully made.
+      *
+      * This includes the initial connection, as well as any subsequent
+      * disconnections.
+      */
+    private[internal] def handleClientConnected() = {
+      logger.info("Connected to MQTT broker")
+      connectionStatusSubscriptions.notify(ConnectionStatus(true))
+    }
+
+    /**
+      * Called whenever the underlying connection is lost unexpectedly.
+      */
+    private[internal] def handleUnexpectedDisconnect() = {
+      logger.warn("Unexpected disconnection from MQTT broker")
+      connectionStatusSubscriptions.notify(ConnectionStatus(false))
+      reconnect() andThen {
+        case Success(_) => handleClientConnected()
+      }
+    }
+
+    /** Repeatedly attempt to reconnect.
+      *
+      * Fails if the connection is de-activated in the mean time, otherwise
+      * it just plugging away at it.
+      */
+    private[internal] def reconnect(): Future[Unit] = {
+        connect() recoverWith {
           case e: paho.MqttException => {
             logger.debug(s"Re-connection attempt failed: ${e}")
             Thread.sleep(5.seconds.toMillis)
-            reAttempt()
+            reconnect()
+          }
+          case e: InactiveConnectionException => {
+            logger.debug("Re-connection aborted since client has been de-activated")
+            Future.failed(e)
+          }
+          case e: Exception => {
+            logger.error(s"Caught unexpected error re-connecting to broker: ${e}")
+            Thread.sleep(5.seconds.toMillis)
+            reconnect()
           }
         }
-      }
-
-      reAttempt().andThen {
-        case Success(_) => logger.info("Successfully re-connected to broker")
-      }
     }
 
-    @annotation.tailrec
-    private[this] def ifActive(f: paho.IMqttAsyncClient => Future[Unit]): Future[Unit] = {
-      val oldClient = client.get
-      if (oldClient == null) {
-        Future.failed(new IllegalStateException("Active connection required."))
-      } else {
-        if (client.compareAndSet(oldClient, null)) {
-          f(oldClient)
-        } else {
-          ifActive(f)
-        }
-      }
+    /** Returns true if `e` indicates the connect was already broken **/
+    private[this] def alreadyDisconnected(e: paho.MqttException) = {
+      e.getReasonCode == paho.MqttException.REASON_CODE_CLIENT_ALREADY_DISCONNECTED 
     }
 
-    @annotation.tailrec
-    private[this] def ifInactive(f: paho.IMqttAsyncClient => Future[Unit]): Future[Unit] = {
-      if (client.get != null) {
-        Future.failed(new IllegalStateException("Inactive connection required."))
-      } else {
-        val newClient = clientFactory
-        if (client.compareAndSet(null, newClient)) {
-          f(newClient)
-        } else {
-          ifInactive(f)
-        }
-      }
-    }
+    /************ paho.MqttCallback implementation ************/
+    def connectionLost(t: Throwable) = handleUnexpectedDisconnect()
+    def deliveryComplete(token: paho.IMqttDeliveryToken): Unit = ???
+    def messageArrived(topic: String, msg: paho.MqttMessage): Unit = ???
 
-    private[this] def promiseAL(p: Promise[Unit]) = new paho.IMqttActionListener {
-      def onSuccess(token: paho.IMqttToken): Unit = {
-        if (p.isCompleted) {
-          // paho client will call callback twice on some occasions
-          logger.warn("Promise is already completed, ignoring...")
-        } else {
-          p.success(())
-        }
-      }
-      def onFailure(token: paho.IMqttToken, t: Throwable): Unit = {
-        p.failure(t)
-      }
-    }
 
   }
 
+  /**
+    * Convenience interface through which paho is interfaced with.
+    *
+    * The paho `IMqttAsyncClient` interface is quite large.
+    * `RestrictedPahoInterface` just pulls out what is necessary, this allows
+    * for simpler testing as it's less work to fake this smaller interface.
+    *
+    * All method names are found in `paho.IMqttAsyncClient`.
+    */
+  protected trait RestrictedPahoInterface {
+    def close(): Unit
+    def connect(options: paho.MqttConnectOptions,
+                listener: paho.IMqttActionListener): paho.IMqttToken
+    def disconnect(quiesce: Long,
+                   listener: paho.IMqttActionListener): paho.IMqttToken
+    def setCallback(cb: paho.MqttCallback): Unit
+  }
+
+  /**
+    * The simple paho-backed implementation of RestrictedPahoInterface
+    */
+  protected class RestrictedPahoInterfaceImpl(c: paho.IMqttAsyncClient)
+      extends RestrictedPahoInterface {
+
+    def close() = c.close()
+    def connect(options: paho.MqttConnectOptions,
+                listener: paho.IMqttActionListener) = c.connect(options, null, listener)
+    def disconnect(quiesce: Long,
+                   listener: paho.IMqttActionListener) = c.disconnect(quiesce, null, listener)
+    def setCallback(cb: paho.MqttCallback) = c.setCallback(cb)
+  }
+
+  /** Module helper functions **/
+
+  /**
+    * Augments `MqttOptions` with additional helper methods.
+    */
   implicit class MqttOptionsPahoOps(val options: MqttOptions) {
     def pahoConnectOptions: paho.MqttConnectOptions = {
       val pOpts = new paho.MqttConnectOptions()
@@ -200,4 +248,19 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       pOpts
     }
   }
+
+  private[this] def promiseAL(p: Promise[Unit]) = new paho.IMqttActionListener {
+    def onSuccess(token: paho.IMqttToken): Unit = {
+      if (p.isCompleted) {
+        // paho client will call callback twice on some occasions
+        logger.warn("Promise is already completed, ignoring...")
+      } else {
+        p.success(())
+      }
+    }
+    def onFailure(token: paho.IMqttToken, t: Throwable): Unit = {
+      p.failure(t)
+    }
+  }
+
 }

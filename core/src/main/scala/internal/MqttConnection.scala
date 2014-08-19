@@ -41,7 +41,8 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
   type MessageHandler = (Topic, MqttMessage) => Unit
   type ConnectionHandler = ConnectionStatus => Unit
 
-  class InactiveConnection extends IllegalStateException("Active connection expected")
+  class InactiveConnectionException extends IllegalStateException("Active connection required")
+  class ActiveConnectionException extends IllegalStateException("In-active connection required")
 
   trait HandlerTokenLike {
     def cancel(): Unit
@@ -206,14 +207,14 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
   /**
    * Infix operators delegate to module functions.
    */
-  implicit class MqttConnectionOps(conn: MqttConnection) {
-    def disconnect() = self.disconnect(conn)
-    def publish(topic: Topic, payload: Seq[Byte], qos: QoS, retained: Boolean) = {
-      self.publish(conn, topic, payload, qos, retained)
-    }
-    def subscribe(topics: Seq[TopicPattern], qos: QoS) = self.subscribe(conn, topics, qos)
-    def unsubscribe(topics: Seq[Topic]) = self.unsubscribe(conn, topics)
-    def attachMessageHandler(callback: MessageHandler) = self.attachMessageHandler(conn, callback)
-    def attachConnectionHandler(callback: ConnectionHandler) = self.attachConnectionHandler(conn, callback)
-  }
+  //implicit class MqttConnectionOps(conn: MqttConnection) {
+  //  def disconnect() = self.disconnect(conn)
+  //  def publish(topic: Topic, payload: Seq[Byte], qos: QoS, retained: Boolean) = {
+  //    self.publish(conn, topic, payload, qos, retained)
+  //  }
+  //  def subscribe(topics: Seq[TopicPattern], qos: QoS) = self.subscribe(conn, topics, qos)
+  //  def unsubscribe(topics: Seq[Topic]) = self.unsubscribe(conn, topics)
+  //  def attachMessageHandler(callback: MessageHandler) = self.attachMessageHandler(conn, callback)
+  //  def attachConnectionHandler(callback: ConnectionHandler) = self.attachConnectionHandler(conn, callback)
+  //}
 }

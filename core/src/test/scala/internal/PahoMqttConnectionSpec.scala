@@ -5,13 +5,12 @@ package internal
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-// WARNING: this shadows uk.co.sprily.mqtt.internal.paho
 import org.eclipse.paho.client.{mqttv3 => paho}
 
 import org.scalatest._
 
-class ConnectionSpec extends FlatSpec with Matchers
-                                      with PahoMqttConnectionModule {
+class PahoMqttConnectionSpec extends FlatSpec with Matchers
+                                with PahoMqttConnectionModule {
 
   "A MqttConnection" should "simply connect and disconnect" in {
 
@@ -21,7 +20,7 @@ class ConnectionSpec extends FlatSpec with Matchers
     val fConnect = client.initialiseConnection()
     Await.result(fConnect, 5.seconds)
 
-    val fDisconnect = client.closeConnection()
+    val fDisconnect = client.disconnect()
     Await.result(fDisconnect, 5.seconds)
   }
 
@@ -56,7 +55,6 @@ class ConnectionSpec extends FlatSpec with Matchers
 
   trait SuccessfulConnection { this: FakePahoAsyncClient =>
     override def connect(options: paho.MqttConnectOptions,
-                         context: Any,
                          listener: paho.IMqttActionListener) = {
       connected = true
       succeedListener(listener)
@@ -65,7 +63,6 @@ class ConnectionSpec extends FlatSpec with Matchers
 
   trait UnsuccessfulConnection { this: FakePahoAsyncClient =>
     override def connect(options: paho.MqttConnectOptions,
-                         context: Any,
                          listener: paho.IMqttActionListener) = {
       connected = false
       failListener(listener)
@@ -74,7 +71,6 @@ class ConnectionSpec extends FlatSpec with Matchers
 
   trait SuccessfulDisconnection { this: FakePahoAsyncClient =>
     override def disconnect(quiesce: Long,
-                            context: Any,
                             listener: paho.IMqttActionListener) = {
       connected = false
       succeedListener(listener)
@@ -82,45 +78,17 @@ class ConnectionSpec extends FlatSpec with Matchers
   }
 
   /** A base implementation of the paho async client interface **/
-  trait FakePahoAsyncClient extends paho.IMqttAsyncClient with FakeClientHelpers {
+  trait FakePahoAsyncClient extends RestrictedPahoInterface with FakeClientHelpers {
 
     protected var connected = false
 
     def close(): Unit = { }
     def isConnected(): Boolean = connected
     def connect(options: paho.MqttConnectOptions,
-                context: Any,
                 l: paho.IMqttActionListener): paho.IMqttToken
     def disconnect(quiesce: Long,
-                   context: Any,
                    l: paho.IMqttActionListener): paho.IMqttToken
-
-    def connect(context: Any, l: paho.IMqttActionListener) = connect(null, context, l)
-    def connect(options: paho.MqttConnectOptions) = connect(options, null, null)
-    def connect(): paho.IMqttToken = connect(null, null, null)
-
-    def disconnect(context: Any, l: paho.IMqttActionListener) = disconnect(30000, context, l)
-    def disconnect(quiesce: Long): paho.IMqttToken = disconnect(quiesce, null, null)
-    def disconnect(): paho.IMqttToken = disconnect(30000, null, null)
-
-
-    def getClientId(): String = "a-client-id"
-    def getPendingDeliveryTokens() = Array[paho.IMqttDeliveryToken]()
-    def getServerURI(): String = "server-uri"
-
-    def publish(x$1: String,x$2: paho.MqttMessage,x$3: Any,x$4: paho.IMqttActionListener): paho.IMqttDeliveryToken = ???
-    def publish(x$1: String,x$2: paho.MqttMessage): paho.IMqttDeliveryToken = ???
-    def publish(x$1: String,x$2: Array[Byte],x$3: Int,x$4: Boolean,x$5: Any,x$6: paho.IMqttActionListener): paho.IMqttDeliveryToken = ???
-    def publish(x$1: String,x$2: Array[Byte],x$3: Int,x$4: Boolean): paho.IMqttDeliveryToken = ???
-    def setCallback(x$1: paho.MqttCallback): Unit = {}
-    def subscribe(x$1: Array[String],x$2: Array[Int],x$3: Any,x$4: paho.IMqttActionListener): paho.IMqttToken = ???
-    def subscribe(x$1: Array[String],x$2: Array[Int]): paho.IMqttToken = ???
-    def subscribe(x$1: String,x$2: Int,x$3: Any,x$4: paho.IMqttActionListener): paho.IMqttToken = ???
-    def subscribe(x$1: String,x$2: Int): paho.IMqttToken = ???
-    def unsubscribe(x$1: Array[String],x$2: Any,x$3: paho.IMqttActionListener): paho.IMqttToken = ???
-    def unsubscribe(x$1: String,x$2: Any,x$3: paho.IMqttActionListener): paho.IMqttToken = ???
-    def unsubscribe(x$1: Array[String]): paho.IMqttToken = ???
-    def unsubscribe(x$1: String): org.eclipse.paho.client.mqttv3.IMqttToken = ???
+    def setCallback(cb: paho.MqttCallback): Unit = { }
   }
 
   class FakeMqttToken extends paho.IMqttToken {
