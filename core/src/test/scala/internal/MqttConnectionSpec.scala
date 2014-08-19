@@ -1,7 +1,6 @@
 package uk.co.sprily
 package mqtt
 package internal
-package paho
 
 import scala.concurrent.Await
 import scala.concurrent.duration._

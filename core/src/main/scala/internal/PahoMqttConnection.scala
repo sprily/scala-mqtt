@@ -1,7 +1,6 @@
 package uk.co.sprily
 package mqtt
 package internal
-package paho
 
 import java.util.concurrent.atomic.AtomicReference
 
@@ -70,7 +69,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       connectionSubscriptions.register(callback)
     }
 
-    private[paho] def closeConnection(): Future[Unit] = {
+    private[internal] def closeConnection(): Future[Unit] = {
       logger.debug("Attempting to close connection to broker.")
       ifActive { c =>
         val p = promise[Unit]
@@ -85,7 +84,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       }
     }
 
-    private[paho] def initialiseConnection(): Future[Unit] = {
+    private[internal] def initialiseConnection(): Future[Unit] = {
       logger.debug("Initialising connection")
       ifInactive { connectWith(_) }
     }
