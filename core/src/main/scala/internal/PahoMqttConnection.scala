@@ -103,7 +103,10 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     def subscribe(topics: Seq[TopicPattern], qos: QoS) = ???
     def unsubscribe(topics: Seq[Topic]) = ???
     def attachMessageHandler(callback: MessageHandler) = ???
-    def attachConnectionHandler(callback: ConnectionHandler) = ???
+
+    def attachConnectionHandler(callback: ConnectionHandler) = {
+      connectionStatusSubscriptions.register(callback)
+    }
 
     /** Connect for the first time.  Fails early **/
     private[internal] def initialiseConnection(): Future[Unit] = {

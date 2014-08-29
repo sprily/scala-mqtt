@@ -3,13 +3,15 @@ package mqtt
 package internal
 
 import scala.concurrent.Await
+import scala.concurrent.promise
 import scala.concurrent.duration._
 
 import org.eclipse.paho.client.{mqttv3 => paho}
 
 import org.scalatest._
 
-class PahoMqttConnectionSpec extends FlatSpec with Matchers
+class PahoMqttConnectionSpec extends FlatSpec
+                                with Matchers
                                 with PahoMqttConnectionModule {
 
   "A MqttConnection" should "simply connect and disconnect" in {
@@ -34,8 +36,31 @@ class PahoMqttConnectionSpec extends FlatSpec with Matchers
     }
   }
 
-  "A MqttConnection" should "reconnect if connection is closed" in (pending)
-  "A MqttConnection" should "disconnect successfully when underlying connection is closeed" in (pending)
+  "A MqttConnection" should "reconnect if connection is closed" in {
+    val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection
+    val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
+
+    // subscribe to receive connection status
+    var statuses = List[ConnectionStatus]()
+    var countdown = promise[Unit]()
+    val connectionStatusChanged = { (status: ConnectionStatus) =>
+      statuses = status :: statuses
+      if (statuses.length == 3) countdown.success(())
+      ()
+    }
+    client.attachConnectionHandler(connectionStatusChanged)
+
+    // initial connection should succeed
+    val fConnect = client.initialiseConnection()
+    Await.result(fConnect, 5.seconds)
+
+    // simulate an unexpected disconnection through the paho.MqttCallback interface
+    client.connectionLost(new java.io.IOException("Uh oh"))
+
+    // check statuses
+    Await.result(countdown.future, 1.seconds)
+    statuses should equal (List(true,false,true).map(ConnectionStatus))
+  }
 
   val defaultOptions = MqttOptions.cleanSession()
 
