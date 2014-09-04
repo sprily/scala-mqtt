@@ -28,11 +28,21 @@ object ScalaMqtt extends Build {
 
     testOptions in Test := Seq(Tests.Filter(unitTestFilter)),
     testOptions in IntegrationTest := Seq(Tests.Filter(integrationTestFilter)),
-    parallelExecution in IntegrationTest := false
+    parallelExecution in IntegrationTest := false,
+
+    publishTo := {
+      val nexus = "http://nexus.sprily.co.uk/nexus/"
+      if (version.value.trim.endsWith("SNAPSHOT"))
+        Some("snapshots" at nexus + "content/repositories/snapshots")
+      else
+        Some("releases"  at nexus + "content/repositories/releases")
+    }
+
   ) ++ inConfig(IntegrationTest)(Defaults.testTasks)
 
   lazy val root      = Project(id        = "scala-mqtt",
                                base      = file("."),
+                               settings  = globalSettings,
                                aggregate = Seq(core, rx))
                          .configs(IntegrationTest)
 
