@@ -14,6 +14,8 @@ class PahoMqttConnectionSpec extends FlatSpec
                                 with Matchers
                                 with PahoMqttConnectionModule {
 
+  import scala.concurrent.ExecutionContext.Implicits.global
+
   "A MqttConnection" should "simply connect and disconnect" in {
 
     val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection
@@ -60,6 +62,94 @@ class PahoMqttConnectionSpec extends FlatSpec
     // check statuses
     Await.result(countdown.future, 1.seconds)
     statuses should equal (List(true,false,true).map(ConnectionStatus))
+  }
+
+  "A MqttConnection" should "reject subscriptions when inactive" in {
+    val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection
+    val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
+
+    val f = client.initialiseConnection andThen {
+      case _ => client.disconnect()
+    }
+    Await.result(f, 5.seconds)
+
+    intercept[ActiveConnectionException] {
+      Await.result(client.subscribe(Nil, AtLeastOnce), 5.seconds)
+    }
+  }
+
+  "A MqttConnection" should "fail subscriptions if underlying connection is broken" in {
+
+    // client which rejects subscriptions immediately
+    val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection {
+      override def subscribe(topics: Seq[String], qos: Seq[Int], listener: paho.IMqttActionListener) = {
+        listener.onFailure(new FakeMqttToken(), new java.io.IOException("broken connection"))
+      }
+    }
+
+    // connect
+    val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
+    Await.ready(client.initialiseConnection(), 5.seconds)
+
+    // attempt subscription
+    intercept[java.io.IOException] {
+      Await.result(client.subscribe(Nil, AtMostOnce), 5.seconds)
+    }
+  }
+
+  "A MqttConnection" should "fail in-flight subscriptions if underlying connection breaks" in {
+
+    // client which never completes the task
+    // this is to simulate how the paho client *actually* behaves when the underlying
+    // connection breaks while a `SUB` message is still in-flight, ie 
+    //
+    //  - the `SUB` message is sent, and the `subscribe()` method call returns
+    //  - the connection breaks
+    //  - the connection is re-established
+    //  - the but the original `SUB` is never re-sent.
+    //  - so the paho token is never completed.
+    val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection
+
+    // connect
+    val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
+    Await.ready(client.initialiseConnection(), 5.seconds)
+
+    // subscription should successfully return an un-completed Future
+    val f = client.subscribe(Nil, AtMostOnce)
+
+    // simulate disconnection through callback interface
+    client.connectionLost(new java.io.IOException("Uh oh"))
+
+    (pending)
+    //intercept[java.io.IOException] {
+    //  Await.result(f, 1.seconds)
+    //}
+  }
+
+  "A MqttConnection" should "forward messages to subscribed handlers" in {
+    val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection
+    val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
+    Await.ready(client.initialiseConnection(), 1.seconds)
+
+    var called = false
+    val token = client.attachMessageHandler { (topic, msg) =>
+      called = true
+      topic should equal (Topic("topic"))
+      msg.payload should equal (List[Byte](0x00, 0x10))
+      msg.qos should equal (AtLeastOnce)
+      msg.retained should equal (false)
+      msg.dup should equal (false)
+    }
+
+    // simulate msg through callback interface
+    val msg = new paho.MqttMessage(List[Byte](0x00, 0x10).toArray)
+    client.messageArrived("topic", msg)
+
+    called should equal (true)
+  }
+
+  "A MqttConnection" should "re-subscribe upon un-expected disconnections" in {
+    (pending)
   }
 
   val defaultOptions = MqttOptions.cleanSession()
@@ -114,6 +204,9 @@ class PahoMqttConnectionSpec extends FlatSpec
     def disconnect(quiesce: Long,
                    l: paho.IMqttActionListener): paho.IMqttToken
     def setCallback(cb: paho.MqttCallback): Unit = { }
+    def subscribe(topics: Seq[String],
+                  qos: Seq[Int],
+                  listener: paho.IMqttActionListener) = { }
   }
 
   class FakeMqttToken extends paho.IMqttToken {

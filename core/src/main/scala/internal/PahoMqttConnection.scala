@@ -68,7 +68,12 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     @volatile private[this] var active = false
     private[this] val connLock = new AnyRef {}
     private[this] val connectionStatusSubscriptions = new NotificationHandler[ConnectionStatus]()
+    private[this] val messageSubscriptions = new NotificationHandler[(Topic, MqttMessage)]()
 
+    /** Disconnect from the broker.
+      *
+      * Fails if the connection is already inactive
+      */
     def disconnect(quiesce: FiniteDuration = 30.seconds) = {
       connLock.synchronized {
         if (!active) {
@@ -100,9 +105,29 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
                 qos: QoS,
                 retained: Boolean) = ???
 
-    def subscribe(topics: Seq[TopicPattern], qos: QoS) = ???
+    def subscribe(topics: Seq[TopicPattern], qos: QoS) = {
+      connLock.synchronized {
+        if (!active) {
+          Future.failed(new ActiveConnectionException())
+        } else {
+          logger.debug(s"Subscribing to topics: ${topics}")
+          try {
+            val p = promise[Unit]
+            client.subscribe(topics.map(_.path),
+                             List.fill(topics.length)(qos.value),
+                             promiseAL(p))
+            p.future
+          } catch {
+            case e: Exception => Future.failed(e)
+          }
+        }
+      }
+    }
+
     def unsubscribe(topics: Seq[Topic]) = ???
-    def attachMessageHandler(callback: MessageHandler) = ???
+    def attachMessageHandler(callback: MessageHandler) = {
+      messageSubscriptions.register(callback.tupled)
+    }
 
     def attachConnectionHandler(callback: ConnectionHandler) = {
       connectionStatusSubscriptions.register(callback)
@@ -200,7 +225,19 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     /************ paho.MqttCallback implementation ************/
     def connectionLost(t: Throwable) = handleUnexpectedDisconnect()
     def deliveryComplete(token: paho.IMqttDeliveryToken): Unit = ???
-    def messageArrived(topic: String, msg: paho.MqttMessage): Unit = ???
+
+    def messageArrived(topic: String, pMsg: paho.MqttMessage): Unit = {
+      val t = Topic(topic)
+      val qos = QoS(pMsg.getQos).getOrElse {
+        throw new IllegalArgumentException(s"Receieved invalid QOS value from broker: ${pMsg.getQos}")
+      }
+      val msg = MqttMessage(
+        payload = pMsg.getPayload.toVector,
+        qos = qos,
+        retained = pMsg.isRetained,
+        dup = pMsg.isDuplicate)
+      messageSubscriptions.notify((t, msg))
+    }
 
 
   }
@@ -221,6 +258,9 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     def disconnect(quiesce: Long,
                    listener: paho.IMqttActionListener): paho.IMqttToken
     def setCallback(cb: paho.MqttCallback): Unit
+    def subscribe(topics: Seq[String],
+                  qos: Seq[Int],
+                  listener: paho.IMqttActionListener): Unit
   }
 
   /**
@@ -235,6 +275,11 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     def disconnect(quiesce: Long,
                    listener: paho.IMqttActionListener) = c.disconnect(quiesce, null, listener)
     def setCallback(cb: paho.MqttCallback) = c.setCallback(cb)
+    def subscribe(topics: Seq[String],
+                  qos: Seq[Int],
+                  listener: paho.IMqttActionListener) = {
+      c.subscribe(topics.toArray, qos.toArray, null, listener)
+    }
   }
 
   /** Module helper functions **/

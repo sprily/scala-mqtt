@@ -208,6 +208,7 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
    * Infix operators delegate to module functions.
    */
   //implicit class MqttConnectionOps(conn: MqttConnection) {
+
   //  def disconnect() = self.disconnect(conn)
   //  def publish(topic: Topic, payload: Seq[Byte], qos: QoS, retained: Boolean) = {
   //    self.publish(conn, topic, payload, qos, retained)
