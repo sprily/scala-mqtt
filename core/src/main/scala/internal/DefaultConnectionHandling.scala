@@ -6,6 +6,8 @@ import scala.language.higherKinds
 
 import java.util.concurrent.atomic.AtomicReference
 
+import util.AtomicOps
+
 protected[internal] trait DefaultConnectionHandling[M[+_]] { this: MqttConnectionModule[M] =>
 
 
@@ -27,17 +29,5 @@ protected[internal] trait DefaultConnectionHandling[M[+_]] { this: MqttConnectio
   }
 
   case class HandlerToken(f: () => Unit) extends HandlerTokenLike { def cancel() = f() }
-
-  implicit class AtomicOps[T](val ref: AtomicReference[T]) {
-    @annotation.tailrec
-    final def update(f: T => T): (T,T) = {
-      val oldT = ref.get
-      val newT = f(oldT)
-      ref.compareAndSet(oldT, newT) match {
-        case true  => (oldT, newT)
-        case false => update(f)
-      }
-    }
-  }
 
 }
