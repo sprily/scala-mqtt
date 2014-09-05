@@ -153,12 +153,10 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
     * When the underlying connection is broken, then subscription fails
     * immediately.
     *
-    * When the underlying connection breaks whilst the `SUB` message is
-    * in-flight, the "task" of subscription may never complete.  In fact,
-    * the behaviour of the paho client is to *never complete* even when the
-    * connection is re-established.  It's because of this that implementors
-    * should consider timing-out on a blocking interface; and users should
-    * consider timing out on an asynchronous interface.
+    * If the underlying connection breaks whilst the `SUB` message is
+    * in-flight, the "task" of subscription should fail.  This diverges
+    * from the behaviour of the paho client, which will *never* complete
+    * the task, even when the connection is re-established.
     *
     * It's safe to subscribe to the same topic-pattern more than once: the
     * broker will only send a single message even if multiple patterns match.

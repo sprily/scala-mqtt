@@ -97,7 +97,7 @@ class PahoMqttConnectionSpec extends FlatSpec
     }
   }
 
-  "A MqttConnection" should "fail in-flight subscriptions if underlying connection breaks" in {
+  "A MqttConnection" should "fail in-flight subscriptions if underlying connection breaks mid-flight" in {
 
     // client which never completes the task
     // this is to simulate how the paho client *actually* behaves when the underlying
@@ -108,22 +108,40 @@ class PahoMqttConnectionSpec extends FlatSpec
     //  - the connection is re-established
     //  - the but the original `SUB` is never re-sent.
     //  - so the paho token is never completed.
-    val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection
+    val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection {
+
+      private var subRcvd = 0
+
+      // Allow the first subscription to succeed, but "hang" on the rest of them
+      override def subscribe(topics: Seq[String],
+                             qos: Seq[Int],
+                             listener: paho.IMqttActionListener) = {
+        subRcvd match {
+          case 0 => listener.onSuccess(new FakeMqttToken())
+          case _ => { }
+        }
+        subRcvd += 1
+      }
+    }
 
     // connect
     val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
     Await.ready(client.initialiseConnection(), 5.seconds)
 
     // subscription should successfully return an un-completed Future
-    val f = client.subscribe(Nil, AtMostOnce)
+    val f1 = client.subscribe(Nil, AtMostOnce)
+    val f2 = client.subscribe(Nil, AtMostOnce)
 
     // simulate disconnection through callback interface
     client.connectionLost(new java.io.IOException("Uh oh"))
 
-    (pending)
-    //intercept[java.io.IOException] {
-    //  Await.result(f, 1.seconds)
-    //}
+    // Check that f1 successfully subscribed
+    Await.ready(f1, 1.seconds)
+
+    // And f2 failed
+    intercept[java.io.IOException] {
+      Await.result(f2, 1.seconds)
+    }
   }
 
   "A MqttConnection" should "forward messages to subscribed handlers" in {

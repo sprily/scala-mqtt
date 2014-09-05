@@ -2,9 +2,11 @@ package uk.co.sprily
 package mqtt
 package internal
 
+import java.util.concurrent.atomic.AtomicReference
+
 import scala.concurrent.{Future, future, Promise, promise}
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 import com.typesafe.scalalogging.slf4j.StrictLogging
 
@@ -12,6 +14,8 @@ import scalaz._
 import scalaz.contrib.std.scalaFuture._
 
 import org.eclipse.paho.client.{mqttv3 => paho}
+
+import util.AtomicOps
 
 protected[mqtt] object PahoMqttConnection extends PahoMqttConnectionModule
 
@@ -67,6 +71,24 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
 
     @volatile private[this] var active = false
     private[this] val connLock = new AnyRef {}
+
+    /**
+      * Subscriptions awaiting acknowledgment.
+      *
+      * The connection was alive when the `SUB` message was sent, but no `SUBACK`
+      * has been received yet.  If during this period the connection is lost,
+      * then the behaviour of the paho client is to:
+      *
+      *  - *not* re-send the original `SUB` message
+      *  - *not* complete the underlying paho.MqttToken
+      *
+      * This `PahoMqttConnection` addresses this by tracking the in-flight
+      * subscriptions, and upon recognising an unexpected disconnection, will
+      * complete the associated `Future` with a failure.
+      *
+      */
+    private[this] var inFlightSubscriptions = new AtomicReference[List[Promise[Unit]]](Nil)
+
     private[this] val connectionStatusSubscriptions = new NotificationHandler[ConnectionStatus]()
     private[this] val messageSubscriptions = new NotificationHandler[(Topic, MqttMessage)]()
 
@@ -116,7 +138,8 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
             client.subscribe(topics.map(_.path),
                              List.fill(topics.length)(qos.value),
                              promiseAL(p))
-            p.future
+            addInFlightSubscription(p)
+            p.future andThen removeInFlightSubscription(p)
           } catch {
             case e: Exception => Future.failed(e)
           }
@@ -185,9 +208,10 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     /**
       * Called whenever the underlying connection is lost unexpectedly.
       */
-    private[this] def handleUnexpectedDisconnect() = {
+    private[this] def handleUnexpectedDisconnect(t: Throwable) = {
       logger.warn("Unexpected disconnection from MQTT broker")
       connectionStatusSubscriptions.notify(ConnectionStatus(false))
+      failAllInFlightSubscriptions(t)
       reconnect() andThen {
         case Success(_) => handleClientConnected()
       }
@@ -222,8 +246,23 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       e.getReasonCode == paho.MqttException.REASON_CODE_CLIENT_ALREADY_DISCONNECTED 
     }
 
+    private[this] def addInFlightSubscription(p: Promise[Unit]) = {
+      inFlightSubscriptions.update (p :: _)
+    }
+
+    private[this] def failAllInFlightSubscriptions(t: Throwable) = {
+      val (ps, _) = inFlightSubscriptions.update { _ => Nil }
+
+      // We don't really mind if the Promise has already been completed
+      ps.foreach { p => p.tryFailure(t) }
+    }
+
+    private[this] def removeInFlightSubscription(p: Promise[Unit]): PartialFunction[Try[Unit], Unit] = {
+      case _ => inFlightSubscriptions.update(_.filter(_ != p))
+    }
+
     /************ paho.MqttCallback implementation ************/
-    def connectionLost(t: Throwable) = handleUnexpectedDisconnect()
+    def connectionLost(t: Throwable) = handleUnexpectedDisconnect(t)
     def deliveryComplete(token: paho.IMqttDeliveryToken): Unit = ???
 
     def messageArrived(topic: String, pMsg: paho.MqttMessage): Unit = {
@@ -296,16 +335,17 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
   }
 
   private[this] def promiseAL(p: Promise[Unit]) = new paho.IMqttActionListener {
+
     def onSuccess(token: paho.IMqttToken): Unit = {
-      if (p.isCompleted) {
-        // paho client will call callback twice on some occasions
+      if (!p.trySuccess(())) {
         logger.warn("Promise is already completed, ignoring...")
-      } else {
-        p.success(())
       }
     }
+
     def onFailure(token: paho.IMqttToken, t: Throwable): Unit = {
-      p.failure(t)
+      if (!p.tryFailure(t)) {
+        logger.warn("Promise is already completed, ignoring...")
+      }
     }
   }
 
