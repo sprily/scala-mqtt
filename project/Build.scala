@@ -55,7 +55,7 @@ object ScalaMqtt extends Build {
                                base      = file("rx"),
                                settings  = globalSettings ++ Seq(
                                  libraryDependencies ++= Seq(
-                                   "com.netflix.rxjava"          % "rxjava-scala"    % "0.16.1"
+                                   "com.netflix.rxjava"          % "rxjava-scala"    % "0.20.4"
                                  )
                                )).configs(IntegrationTest)
                                  .dependsOn(core)

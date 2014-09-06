@@ -55,7 +55,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
                          to: Seq[(TopicPattern,QoS)]) = conn.subscribe(to)
 
   override def unsubscribe(conn: MqttConnection,
-                           topics: Seq[Topic]) = conn.unsubscribe(topics)
+                           topics: Seq[TopicPattern]) = conn.unsubscribe(topics)
 
   override def attachMessageHandler(conn: MqttConnection,
                                     callback: MessageHandler) = {
@@ -159,7 +159,11 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       }
     }
 
-    def unsubscribe(topics: Seq[Topic]) = ???
+    def unsubscribe(topics: Seq[TopicPattern]) = {
+      logger.info("Unsubscribing from ${topics}")
+      Future.successful(())
+    }
+
     def attachMessageHandler(callback: MessageHandler) = {
       messageSubscriptions.register(callback.tupled)
     }
@@ -330,6 +334,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     def deliveryComplete(token: paho.IMqttDeliveryToken): Unit = ???
 
     def messageArrived(topic: String, pMsg: paho.MqttMessage): Unit = {
+      logger.debug(s"Message arrived at: ${topic}")
       val t = Topic(topic)
       val qos = QoS(pMsg.getQos).getOrElse {
         throw new IllegalArgumentException(s"Receieved invalid QOS value from broker: ${pMsg.getQos}")

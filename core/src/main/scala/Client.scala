@@ -23,13 +23,15 @@ import scala.language.higherKinds
   * initial call to [[uk.co.sprily.mqtt.Client.open()]].
   *
   */
-trait Client[M[+_], N[+_]] {
+trait ClientModule[M[+_], N[+_]] {
+
+  type Client
 
   /** Open the connection.
     *
     * This may fail if an initial connection cannot be made.
     */
-  def connect(): N[Unit]
+  def connect(options: MqttOptions): N[Client]
 
   /** Close the connection.
     *
@@ -37,7 +39,7 @@ trait Client[M[+_], N[+_]] {
     * be re-opened again by calling
     * [[uk.co.sprily.mqtt.Client.open]].
     */
-  def disconnect(): N[Unit]
+  def disconnect(client: Client): N[Unit]
 
   /** A stream of the changing connection status, ie online or offline.
     *
@@ -48,7 +50,7 @@ trait Client[M[+_], N[+_]] {
     * least one element from the stream, and it will include the connection
     * status '''at the time of subscription'''.
     */
-  def status: M[ConnectionStatus]
+  def status(client: Client): M[ConnectionStatus]
 
   /** The stream of '''all''' data messages receieved from the broker by
     * '''already established''' subscriptions.
@@ -60,7 +62,7 @@ trait Client[M[+_], N[+_]] {
     * messages that are being receieved as a result of other subscriptions.  Ie
     * - it's useful for debugging/logging/tracing etc.
     */
-  def data(): M[MqttMessage]
+  def data(client: Client): M[MqttMessage]
 
   /** The stream of data messages receieved from the broker, filtered by the
     * given topic.
@@ -81,7 +83,7 @@ trait Client[M[+_], N[+_]] {
     * and only if there are no ''other'' subscribers to the given topic(s) over
     * this connection.
     */
-  def data(topic: TopicPattern): M[MqttMessage] = data(List(topic))
+  def data(client: Client, topic: TopicPattern): M[MqttMessage] = data(client, List(topic))
 
   /** The stream of data messages received from the broker, filtered by the
     * given topics.
@@ -100,15 +102,16 @@ trait Client[M[+_], N[+_]] {
     * `UNSUBSCRIBE` message to the broker if and only if there are no ''other''
     * subscribers to the given topic(s) over this connection.
     */
-  def data(topic: TopicPattern, topics: TopicPattern*): M[MqttMessage] = {
-    data(topic :: topics.toList)
+  def data(client: Client, topic: TopicPattern, topics: TopicPattern*): M[MqttMessage] = {
+    data(client, topic :: topics.toList)
   }
 
-  protected def data(topics: Seq[TopicPattern]): M[MqttMessage]
+  protected def data(client: Client, topics: Seq[TopicPattern]): M[MqttMessage]
 
   /** Asynchronously publish some data to the given topic.
     */
-  def publish(topic: Topic,
+  def publish(client: Client,
+              topic: Topic,
               payload: Array[Byte],
               qos: QoS = AtLeastOnce,
               retain: Boolean = false): N[Unit]

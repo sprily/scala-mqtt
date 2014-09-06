@@ -192,7 +192,7 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
     * consider timing out on an asynchronous interface.
     *
     */
-  def unsubscribe(conn: MqttConnection, topics: Seq[Topic]): M[Unit]
+  def unsubscribe(conn: MqttConnection, topics: Seq[TopicPattern]): M[Unit]
 
   /**
     * Attach a callback to be notified of all incoming messages.
