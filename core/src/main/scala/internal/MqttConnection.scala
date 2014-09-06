@@ -170,7 +170,10 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
     * re-subscribe across unexpected connections.
     *
     */
-  def subscribe(conn: MqttConnection, topics: Seq[TopicPattern], qos: QoS): M[Unit]
+  def subscribe(conn: MqttConnection, to: Seq[(TopicPattern, QoS)]): M[Unit]
+  def subscribe(conn: MqttConnection, topics: Seq[TopicPattern], qos: QoS): M[Unit] = {
+    subscribe(conn, topics.map((_,qos)))
+  }
 
   /**
     * Unsubscribe from the given topics.

@@ -52,8 +52,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
                        retained: Boolean) = conn.publish(topic, payload, qos, retained)
 
   override def subscribe(conn: MqttConnection,
-                         topics: Seq[TopicPattern],
-                         qos: QoS) = conn.subscribe(topics, qos)
+                         to: Seq[(TopicPattern,QoS)]) = conn.subscribe(to)
 
   override def unsubscribe(conn: MqttConnection,
                            topics: Seq[Topic]) = conn.unsubscribe(topics)
@@ -138,18 +137,15 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
                 qos: QoS,
                 retained: Boolean) = ???
 
-    def subscribe(topics: Seq[TopicPattern], qos: QoS): Future[Unit] = {
-      subscribe(topics, List.fill(topics.length)(qos))
-    }
-
-    def subscribe(topics: Seq[TopicPattern], qoss: Seq[QoS]): Future[Unit] = {
+    def subscribe(to: Seq[(TopicPattern, QoS)]): Future[Unit] = {
       connLock.synchronized {
         if (!active) {
           Future.failed(new ActiveConnectionException())
         } else {
-          logger.debug(s"Subscribing to topics: ${topics}")
+          logger.debug(s"Subscribing to topics: ${to}")
           try {
             val p = promise[Unit]
+            val (topics, qoss) = to.unzip
             client.subscribe(topics.map(_.path),
                              qoss.map(_.value),
                              promiseAL(p))
@@ -300,10 +296,10 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     private[this] def resubscribeToActiveSubscriptions() = {
 
       def resubscribe(): Future[Unit] = {
-        val (ts, qoss) = activeSubscriptions.get.toList.unzip
-        logger.debug(s"Re-subscribing to: ${ts}")
-        if (ts.nonEmpty) {
-          subscribe(ts, qoss) recoverWith {
+        val subs = activeSubscriptions.get.toList
+        if (subs.nonEmpty) {
+          logger.debug(s"Re-subscribing to: ${subs}")
+          subscribe(subs) recoverWith {
 
             case e: InactiveConnectionException => {
               logger.debug("Re-subscription aborted since client has been de-activated")

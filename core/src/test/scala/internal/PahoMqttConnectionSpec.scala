@@ -105,7 +105,7 @@ class PahoMqttConnectionSpec extends FlatSpec
     Await.result(f, 5.seconds)
 
     intercept[ActiveConnectionException] {
-      Await.result(client.subscribe(Nil, AtLeastOnce), 5.seconds)
+      Await.result(client.subscribe(Nil), 5.seconds)
     }
   }
 
@@ -124,7 +124,7 @@ class PahoMqttConnectionSpec extends FlatSpec
 
     // attempt subscription
     intercept[java.io.IOException] {
-      Await.result(client.subscribe(Nil, AtMostOnce), 5.seconds)
+      Await.result(client.subscribe(Nil), 5.seconds)
     }
   }
 
@@ -160,8 +160,8 @@ class PahoMqttConnectionSpec extends FlatSpec
     Await.ready(client.initialiseConnection(), 5.seconds)
 
     // subscription should successfully return an un-completed Future
-    val f1 = client.subscribe(Nil, AtMostOnce)
-    val f2 = client.subscribe(Nil, AtMostOnce)
+    val f1 = client.subscribe(Nil)
+    val f2 = client.subscribe(Nil)
 
     // simulate disconnection through callback interface
     client.connectionLost(new java.io.IOException("Uh oh"))
@@ -202,6 +202,7 @@ class PahoMqttConnectionSpec extends FlatSpec
     val latch = promise[Unit]
     val topics = List(TopicPattern("one"), TopicPattern("two"))
     val qoss   = List(AtLeastOnce, AtMostOnce)
+    val subs   = topics zip qoss
 
     val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection {
 
@@ -229,8 +230,8 @@ class PahoMqttConnectionSpec extends FlatSpec
 
     val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
     Await.ready(client.initialiseConnection, 1.seconds)
-    Await.ready(client.subscribe(topics, qoss), 1.seconds)
-    Await.ready(client.subscribe(topics, List(AtMostOnce, ExactlyOnce)), 1.seconds)
+    Await.ready(client.subscribe(subs), 1.seconds)
+    Await.ready(client.subscribe(topics zip List(AtMostOnce, ExactlyOnce)), 1.seconds)
     
     // simulate disconnection
     client.connectionLost(new java.io.IOException("Uh oh"))
@@ -248,6 +249,7 @@ class PahoMqttConnectionSpec extends FlatSpec
     val disconnectLatch = promise[Unit]
     val topics = List(TopicPattern("one"), TopicPattern("two"))
     val qoss   = List(AtLeastOnce, AtMostOnce)
+    val subs   = topics zip qoss
 
     val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection {
 
@@ -270,7 +272,7 @@ class PahoMqttConnectionSpec extends FlatSpec
 
     val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
     Await.ready(client.initialiseConnection, 3.seconds)
-    Await.ready(client.subscribe(topics, qoss), 3.seconds)
+    Await.ready(client.subscribe(subs), 3.seconds)
     
     // simulate disconnection
     client.connectionLost(new java.io.IOException("Uh oh"))
