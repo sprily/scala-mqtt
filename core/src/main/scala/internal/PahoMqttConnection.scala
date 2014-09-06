@@ -69,6 +69,9 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
   class MqttConnection(client: RestrictedPahoInterface,
                        options: paho.MqttConnectOptions) extends paho.MqttCallback {
 
+    import MqttConnection._
+
+    @volatile private[this] var connectionState: ConnState = Disconnected
     @volatile private[this] var active = false
     private[this] val connLock = new AnyRef {}
 
@@ -103,6 +106,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
         } else {
           logger.debug("De-activating MqttConnection")
           active = false
+          connectionState = Disconnecting
 
           val disconnect = {
             try {
@@ -116,7 +120,10 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
           }
 
           disconnect andThen {
-            case _ => client.close()
+            case _ => connLock.synchronized {
+              client.close()
+              connectionState = Disconnected
+            }
           }
         }
       }
@@ -184,6 +191,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
           Future.failed(new InactiveConnectionException())
         } else {
           try {
+            connectionState = Connecting
             val p = promise[Unit]
             client.connect(options, promiseAL(p))
             p.future
@@ -201,19 +209,31 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       * disconnections.
       */
     private[this] def handleClientConnected() = {
-      logger.info("Connected to MQTT broker")
-      connectionStatusSubscriptions.notify(ConnectionStatus(true))
+      connLock.synchronized {
+        logger.info("Connected to MQTT broker")
+        connectionState = Connected
+        connectionStatusSubscriptions.notify(ConnectionStatus(true))
+      }
     }
 
     /**
       * Called whenever the underlying connection is lost unexpectedly.
       */
     private[this] def handleUnexpectedDisconnect(t: Throwable) = {
-      logger.warn("Unexpected disconnection from MQTT broker")
-      connectionStatusSubscriptions.notify(ConnectionStatus(false))
-      failAllInFlightSubscriptions(t)
-      reconnect() andThen {
-        case Success(_) => handleClientConnected()
+      connLock.synchronized {
+        logger.warn(s"Unexpected disconnection from MQTT broker: ${t}")
+
+        if (connectionState != Connected) {
+          logger.warn(s"Not attempting to re-connect, current state: ${connectionState}")
+        } else {
+          logger.info(s"Handling unexpected disconnection from the broker.  Current state: ${connectionState}")
+          connectionState = Disconnected
+          connectionStatusSubscriptions.notify(ConnectionStatus(false))
+          failAllInFlightSubscriptions(t)
+          reconnect() andThen {
+            case Success(_) => handleClientConnected()
+          }
+        }
       }
     }
 
@@ -278,7 +298,14 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       messageSubscriptions.notify((t, msg))
     }
 
-
+  }
+  
+  object MqttConnection {
+    private sealed trait ConnState
+    private case object Connecting extends ConnState
+    private case object Connected extends ConnState
+    private case object Disconnecting extends ConnState
+    private case object Disconnected extends ConnState
   }
 
   /**

@@ -64,6 +64,37 @@ class PahoMqttConnectionSpec extends FlatSpec
     statuses should equal (List(true,false,true).map(ConnectionStatus))
   }
 
+  "A MqttConnection" should "protect itself from disconnection handler being called twice in succession" in {
+
+    val failureLatch = promise[Unit]
+
+    val fake = new FakePahoAsyncClient with SuccessfulDisconnection {
+
+      var numConnectCalls = 0
+
+      override def connect(options: paho.MqttConnectOptions,
+                           listener: paho.IMqttActionListener) = {
+
+        numConnectCalls += 1
+        numConnectCalls match {
+          case 1 => succeedListener(listener)
+          case 2 => new FakeMqttToken()
+          case 3 => failureLatch.success(()) ; new FakeMqttToken()
+        }
+      }
+    }
+
+    val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
+
+    Await.ready(client.initialiseConnection, 1.seconds)
+    client.connectionLost(new java.io.IOException("First failure"))
+    client.connectionLost(new java.io.IOException("Second failure"))
+
+    intercept[java.util.concurrent.TimeoutException] {
+      Await.result(failureLatch.future, 1.seconds)
+    }
+  }
+
   "A MqttConnection" should "reject subscriptions when inactive" in {
     val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection
     val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
