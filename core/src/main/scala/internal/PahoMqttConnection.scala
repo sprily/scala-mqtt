@@ -11,6 +11,8 @@ import scala.util.{Failure, Success, Try}
 import com.typesafe.scalalogging.slf4j.StrictLogging
 
 import scalaz._
+import scalaz.syntax.monoid._
+import scalaz.std.map._
 import scalaz.contrib.std.scalaFuture._
 
 import org.eclipse.paho.client.{mqttv3 => paho}
@@ -92,6 +94,8 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       */
     private[this] var inFlightSubscriptions = new AtomicReference[List[Promise[Unit]]](Nil)
 
+    private[this] var activeSubscriptions = new AtomicReference[Map[TopicPattern,QoS]](Map())
+
     private[this] val connectionStatusSubscriptions = new NotificationHandler[ConnectionStatus]()
     private[this] val messageSubscriptions = new NotificationHandler[(Topic, MqttMessage)]()
 
@@ -134,7 +138,11 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
                 qos: QoS,
                 retained: Boolean) = ???
 
-    def subscribe(topics: Seq[TopicPattern], qos: QoS) = {
+    def subscribe(topics: Seq[TopicPattern], qos: QoS): Future[Unit] = {
+      subscribe(topics, List.fill(topics.length)(qos))
+    }
+
+    def subscribe(topics: Seq[TopicPattern], qoss: Seq[QoS]): Future[Unit] = {
       connLock.synchronized {
         if (!active) {
           Future.failed(new ActiveConnectionException())
@@ -143,10 +151,11 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
           try {
             val p = promise[Unit]
             client.subscribe(topics.map(_.path),
-                             List.fill(topics.length)(qos.value),
+                             qoss.map(_.value),
                              promiseAL(p))
             addInFlightSubscription(p)
-            p.future andThen removeInFlightSubscription(p)
+            p.future andThen removeInFlightSubscription(p) andThen
+                             addActiveSubscriptions(topics.zip(qoss))
           } catch {
             case e: Exception => Future.failed(e)
           }
@@ -213,6 +222,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
         logger.info("Connected to MQTT broker")
         connectionState = Connected
         connectionStatusSubscriptions.notify(ConnectionStatus(true))
+        resubscribeToActiveSubscriptions()
       }
     }
 
@@ -274,11 +284,49 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       val (ps, _) = inFlightSubscriptions.update { _ => Nil }
 
       // We don't really mind if the Promise has already been completed
-      ps.foreach { p => p.tryFailure(t) }
+      ps.foreach { p => p.tryFailure(new UnexpectedDisconnectionException(t)) }
     }
 
     private[this] def removeInFlightSubscription(p: Promise[Unit]): PartialFunction[Try[Unit], Unit] = {
       case _ => inFlightSubscriptions.update(_.filter(_ != p))
+    }
+
+    private[this] def addActiveSubscriptions(ts: Seq[(TopicPattern, QoS)]): PartialFunction[Try[Unit], Unit] = {
+      case Success(_) => {
+        activeSubscriptions.update { topics => topics |+| ts.toMap }
+      }
+    }
+
+    private[this] def resubscribeToActiveSubscriptions() = {
+
+      def resubscribe(): Future[Unit] = {
+        val (ts, qoss) = activeSubscriptions.get.toList.unzip
+        logger.debug(s"Re-subscribing to: ${ts}")
+        if (ts.nonEmpty) {
+          subscribe(ts, qoss) recoverWith {
+
+            case e: InactiveConnectionException => {
+              logger.debug("Re-subscription aborted since client has been de-activated")
+              Future.failed(e)
+            }
+
+            case e: UnexpectedDisconnectionException => {
+              logger.debug("Re-subscription aborted since client has disconnected unexpectedly")
+              Future.failed(e)
+            }
+
+            case e: Exception => {
+              logger.error(s"Caught error attempting to re-subscribe to active topics: ${e}")
+              Thread.sleep(1.seconds.toMillis)
+              resubscribe()
+            }
+          }
+        } else {
+          Future.successful(())
+        }
+      }
+
+      if (options.isCleanSession) resubscribe()
     }
 
     /************ paho.MqttCallback implementation ************/
@@ -374,6 +422,11 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
         logger.warn("Promise is already completed, ignoring...")
       }
     }
+  }
+
+  private[this] implicit def QosMonoid: Monoid[QoS] = new Monoid[QoS] {
+    def zero = AtMostOnce
+    def append(q1: QoS, q2: => QoS) = QoS(Math.max(q1.value, q2.value)).get
   }
 
 }

@@ -43,6 +43,7 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
 
   class InactiveConnectionException extends IllegalStateException("Active connection required")
   class ActiveConnectionException extends IllegalStateException("In-active connection required")
+  class UnexpectedDisconnectionException(t: Throwable) extends java.io.IOException
 
   trait HandlerTokenLike {
     def cancel(): Unit
@@ -166,8 +167,7 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
     * client.
     *
     * When the cleanSession flag is set to `true`, the implementor should
-    * not re-subscribe across unexpected connections.  Leave that choice to
-    * the user.
+    * re-subscribe across unexpected connections.
     *
     */
   def subscribe(conn: MqttConnection, topics: Seq[TopicPattern], qos: QoS): M[Unit]

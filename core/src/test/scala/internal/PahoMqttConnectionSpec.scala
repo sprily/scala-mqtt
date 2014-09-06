@@ -198,7 +198,91 @@ class PahoMqttConnectionSpec extends FlatSpec
   }
 
   "A MqttConnection" should "re-subscribe upon un-expected disconnections" in {
-    (pending)
+    import scala.language.reflectiveCalls
+    val latch = promise[Unit]
+    val topics = List(TopicPattern("one"), TopicPattern("two"))
+    val qoss   = List(AtLeastOnce, AtMostOnce)
+
+    val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection {
+
+      var numSubCalls = 0
+      var resubscriptions: Option[(Seq[String], Seq[Int])] = None
+
+      override def subscribe(topics: Seq[String],
+                             qos: Seq[Int],
+                             listener: paho.IMqttActionListener) = {
+
+        numSubCalls += 1
+
+        numSubCalls match {
+          case 1 => listener.onSuccess(new FakeMqttToken())
+          case 2 => listener.onSuccess(new FakeMqttToken())
+          case 3 => listener.onFailure(new FakeMqttToken(), new java.io.IOException("Something went wrong"))
+          case 4 => {
+            resubscriptions = Some((topics, qos))
+            listener.onSuccess(new FakeMqttToken())
+            latch.success(())
+          }
+        }
+      }
+    }
+
+    val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
+    Await.ready(client.initialiseConnection, 1.seconds)
+    Await.ready(client.subscribe(topics, qoss), 1.seconds)
+    Await.ready(client.subscribe(topics, List(AtMostOnce, ExactlyOnce)), 1.seconds)
+    
+    // simulate disconnection
+    client.connectionLost(new java.io.IOException("Uh oh"))
+
+    Await.ready(latch.future, 3.seconds)
+    fake.resubscriptions should not equal None
+    fake.resubscriptions.get._1 should equal (topics.map(_.path))
+    fake.resubscriptions.get._2 should equal (List(AtLeastOnce, ExactlyOnce).map(_.value))
+  }
+
+  "A MqttConnection" should "re-subscribe *through* disconnections" in {
+
+    val latch = promise[Unit]
+    val failureLatch = promise[Unit]
+    val disconnectLatch = promise[Unit]
+    val topics = List(TopicPattern("one"), TopicPattern("two"))
+    val qoss   = List(AtLeastOnce, AtMostOnce)
+
+    val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection {
+
+      var numSubCalls = 0
+
+      override def subscribe(topics: Seq[String],
+                             qos: Seq[Int],
+                             listener: paho.IMqttActionListener) = {
+
+        numSubCalls += 1
+
+        numSubCalls match {
+          case 1 => listener.onSuccess(new FakeMqttToken())
+          case 2 => disconnectLatch.success(()) // note listener is not completed
+          case 3 => listener.onSuccess(new FakeMqttToken()) ; latch.success(())
+          case _ => listener.onSuccess(new FakeMqttToken()) ; failureLatch.success(())
+        }
+      }
+    }
+
+    val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
+    Await.ready(client.initialiseConnection, 3.seconds)
+    Await.ready(client.subscribe(topics, qoss), 3.seconds)
+    
+    // simulate disconnection
+    client.connectionLost(new java.io.IOException("Uh oh"))
+
+    // wait for disconnectLatch to disconnect again
+    Await.ready(disconnectLatch.future, 3.seconds)
+    client.connectionLost(new java.io.IOException("Not again"))
+
+    Await.ready(latch.future, 3.seconds)
+    intercept[java.util.concurrent.TimeoutException] {
+      Await.ready(failureLatch.future, 3.seconds)
+    }
   }
 
   val defaultOptions = MqttOptions.cleanSession()
