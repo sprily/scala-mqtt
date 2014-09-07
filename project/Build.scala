@@ -31,7 +31,7 @@ object ScalaMqtt extends Build {
     parallelExecution in IntegrationTest := false,
 
     publishTo := {
-      val nexus = "http://nexus.sprily.co.uk/nexus/"
+      val nexus = "http://repo.sprily.co.uk/nexus/"
       if (version.value.trim.endsWith("SNAPSHOT"))
         Some("snapshots" at nexus + "content/repositories/snapshots")
       else
