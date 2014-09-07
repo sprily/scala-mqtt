@@ -287,6 +287,51 @@ class PahoMqttConnectionSpec extends FlatSpec
     }
   }
 
+  "A MqttConnection" should "unsubscribe from topics" in {
+    import scala.language.reflectiveCalls
+
+    val topics = List(TopicPattern("one"), TopicPattern("two"))
+    val qoss   = List(AtLeastOnce, AtMostOnce)
+    val subs   = topics zip qoss
+
+    val reSubscribedLatch = promise[Unit]
+    val fake = new FakePahoAsyncClient with SuccessfulConnection with SuccessfulDisconnection {
+
+      var subs   = List[String]()
+      var unsubs = List[String]()
+      var subsCalls = 0
+
+      override def subscribe(topics: Seq[String],
+                             qos: Seq[Int],
+                             listener: paho.IMqttActionListener) = {
+        subsCalls += 1
+        subs = subs ++ topics
+        listener.onSuccess(new FakeMqttToken())
+        if (subsCalls == 2) { reSubscribedLatch.success(()) }
+      }
+
+      override def unsubscribe(topics: Seq[String],
+                               listener: paho.IMqttActionListener) = {
+        unsubs = unsubs ++ topics
+        listener.onSuccess(new FakeMqttToken())
+      }
+    }
+
+    val client = new MqttConnection(fake, defaultOptions.pahoConnectOptions)
+    Await.ready(client.initialiseConnection, 3.seconds)
+    Await.ready(client.subscribe(subs), 3.seconds)
+    Await.ready(client.unsubscribe(topics.tail), 3.seconds)
+
+    // force unexpected disconnection, and await re-subscriptions after
+    // successful reconnection
+    client.connectionLost(new java.io.IOException("Uh oh"))
+    Await.ready(reSubscribedLatch.future, 3.seconds)
+
+    fake.subs should equal ((topics ++ topics.tail).map(_.path))
+    fake.unsubs should equal (topics.tail.map(_.path))
+
+  }
+
   val defaultOptions = MqttOptions.cleanSession()
 
   trait FakeClientHelpers {
@@ -342,6 +387,8 @@ class PahoMqttConnectionSpec extends FlatSpec
     def subscribe(topics: Seq[String],
                   qos: Seq[Int],
                   listener: paho.IMqttActionListener) = { }
+    def unsubscribe(topics: Seq[String],
+                    listener: paho.IMqttActionListener) = { }
   }
 
   class FakeMqttToken extends paho.IMqttToken {

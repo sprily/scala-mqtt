@@ -160,8 +160,22 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     }
 
     def unsubscribe(topics: Seq[TopicPattern]) = {
-      logger.info("Unsubscribing from ${topics}")
-      Future.successful(())
+
+      connLock.synchronized {
+        if (!active) {
+          Future.failed(new ActiveConnectionException())
+        } else {
+          logger.debug(s"Unsubscribing from: ${topics}")
+          try {
+            val p = promise[Unit]
+            client.unsubscribe(topics.map(_.path),
+                               promiseAL(p))
+            p.future andThen removeActiveSubscriptions(topics)
+          } catch {
+            case e: Exception => Future.failed(e)
+          }
+        }
+      }
     }
 
     def attachMessageHandler(callback: MessageHandler) = {
@@ -297,6 +311,12 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
       }
     }
 
+    private[this] def removeActiveSubscriptions(ts: Seq[TopicPattern]): PartialFunction[Try[Unit], Unit] = {
+      case Success(_) => {
+        activeSubscriptions.update { _.filterKeys { t => ts contains t } }
+      }
+    }
+
     private[this] def resubscribeToActiveSubscriptions() = {
 
       def resubscribe(): Future[Unit] = {
@@ -369,13 +389,15 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
   protected trait RestrictedPahoInterface {
     def close(): Unit
     def connect(options: paho.MqttConnectOptions,
-                listener: paho.IMqttActionListener): paho.IMqttToken
+                listener: paho.IMqttActionListener): paho.IMqttToken    // TODO: don't return token
     def disconnect(quiesce: Long,
                    listener: paho.IMqttActionListener): paho.IMqttToken
     def setCallback(cb: paho.MqttCallback): Unit
     def subscribe(topics: Seq[String],
                   qos: Seq[Int],
                   listener: paho.IMqttActionListener): Unit
+    def unsubscribe(topics: Seq[String],
+                    listener: paho.IMqttActionListener): Unit
   }
 
   /**
@@ -394,6 +416,9 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
                   qos: Seq[Int],
                   listener: paho.IMqttActionListener) = {
       c.subscribe(topics.toArray, qos.toArray, null, listener)
+    }
+    def unsubscribe(topics: Seq[String], listener: paho.IMqttActionListener) = {
+      c.unsubscribe(topics.toArray, null , listener)
     }
   }
 
