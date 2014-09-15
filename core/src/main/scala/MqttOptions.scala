@@ -19,7 +19,7 @@ object MqttOptions {
                    username: Option[String] = None,
                    password: Option[String] = None,
                    keepAliveInterval: FiniteDuration = 60.seconds) = {
-    new MqttOptions(host = host,
+    new MqttOptions(url = url,
                     port = port,
                     clientId = ClientId.random(),
                     cleanSession = true,
