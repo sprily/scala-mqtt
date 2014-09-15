@@ -71,23 +71,31 @@ trait RxClient[N[+_]] extends ClientModule[Observable, N]
     }
 
     private[this] def subscribeTo(topics: Seq[TopicPattern]) = {
+      logger.debug(s"Client attempting to subscribe to topics: ${topics}")
       connLock.synchronized {
         val subs = topics.toList.foldMap { t => Map(t -> 1) }
         val newSubs = topics.filterNot(currentSubscriptions contains _)
 
+        logger.debug(s"Current subscriptions before: ${currentSubscriptions}")
         currentSubscriptions = subs |+| currentSubscriptions
+        logger.debug(s"Current subscriptions after: ${currentSubscriptions}")
+        logger.debug(s"New subscriptions: ${newSubs}")
         connectionModule.subscribe(connection, newSubs.map((_,AtMostOnce)))
       }
     }
 
     private[this] def unsubscribeFrom(topics: Seq[TopicPattern]) = {
+      logger.debug(s"Client attempting to un-subscribe from: ${topics}")
       connLock.synchronized {
         val subs = topics.toList.foldMap { t => Map(t -> -1) }
+        logger.debug(s"Current subscriptions before: ${currentSubscriptions}")
         val nextSubs = subs |+| currentSubscriptions
         val unsubscribeFrom = nextSubs.toList.filter(_._2 == 0).map(_._1)
+        logger.debug(s"Need to unsubscribe from: ${unsubscribeFrom}")
 
         connectionModule.unsubscribe(connection, unsubscribeFrom)
         currentSubscriptions = nextSubs.filter(_._2 > 0)
+        logger.debug(s"Current subscriptions after: ${currentSubscriptions}")
       }
     }
 
