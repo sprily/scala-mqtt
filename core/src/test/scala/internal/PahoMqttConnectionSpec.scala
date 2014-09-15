@@ -327,7 +327,7 @@ class PahoMqttConnectionSpec extends FlatSpec
     client.connectionLost(new java.io.IOException("Uh oh"))
     Await.ready(reSubscribedLatch.future, 3.seconds)
 
-    fake.subs should equal ((topics ++ topics.tail).map(_.path))
+    fake.subs should equal ((topics ++ List(topics.head)).map(_.path))
     fake.unsubs should equal (topics.tail.map(_.path))
 
   }

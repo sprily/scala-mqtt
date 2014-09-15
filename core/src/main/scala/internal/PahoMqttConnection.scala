@@ -344,7 +344,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     private[this] def removeActiveSubscriptions(ts: Seq[TopicPattern]): PartialFunction[Try[Unit], Unit] = {
       case Success(_) => {
         logger.debug(s"Removing active subscriptions: ${ts}")
-        activeSubscriptions.update { _.filterKeys { t => ts contains t } }
+        activeSubscriptions.update { _.filterKeys { t => ! (ts contains t) } }
         logger.debug(s"Active subcriptions after removal: ${activeSubscriptions.get}")
       }
     }
