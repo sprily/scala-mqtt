@@ -432,6 +432,9 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     def pahoConnectOptions: paho.MqttConnectOptions = {
       val pOpts = new paho.MqttConnectOptions()
       pOpts setCleanSession(options.cleanSession)
+      pOpts setUserName(options.username.getOrElse(null))
+      pOpts setPassword(options.password.map(_.toArray).getOrElse("".toArray))
+      pOpts setKeepAliveInterval(options.keepAliveInterval.toSeconds.asInstanceOf[Int])
       pOpts
     }
   }
