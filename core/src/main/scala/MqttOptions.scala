@@ -4,7 +4,7 @@ package mqtt
 import scala.concurrent.duration._
 
 case class MqttOptions(
-    host: String,
+    url: String,
     port: Int,
     clientId: ClientId,
     cleanSession: Boolean,
@@ -14,7 +14,7 @@ case class MqttOptions(
 
 object MqttOptions {
 
-  def cleanSession(host: String ="127.0.0.1",
+  def cleanSession(url: String ="tcp://127.0.0.1",
                    port: Int = 1883,
                    username: Option[String] = None,
                    password: Option[String] = None,

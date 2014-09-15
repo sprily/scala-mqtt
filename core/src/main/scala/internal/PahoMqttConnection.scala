@@ -34,7 +34,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
                                   callbacks: Seq[ConnectionHandler]) = {
     val client = new MqttConnection(
                   new RestrictedPahoInterfaceImpl(
-                    new paho.MqttAsyncClient(s"tcp://${options.host}:${options.port}",
+                    new paho.MqttAsyncClient(s"${options.url}:${options.port}",
                                              options.clientId.s)),
                   options.pahoConnectOptions)
     val tokens = callbacks.map(client.attachConnectionHandler(_))
