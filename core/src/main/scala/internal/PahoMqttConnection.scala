@@ -96,7 +96,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     private[this] var activeSubscriptions = new AtomicReference[Map[TopicPattern,QoS]](Map())
 
     private[this] val connectionStatusSubscriptions = new NotificationHandler[ConnectionStatus]()
-    private[this] val messageSubscriptions = new NotificationHandler[(Topic, MqttMessage)]()
+    private[this] val messageSubscriptions = new NotificationHandler[MqttMessage]()
 
     /** Disconnect from the broker.
       *
@@ -179,7 +179,7 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
     }
 
     def attachMessageHandler(callback: MessageHandler) = {
-      messageSubscriptions.register(callback.tupled)
+      messageSubscriptions.register(callback)
     }
 
     def attachConnectionHandler(callback: ConnectionHandler) = {
@@ -360,11 +360,12 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Futu
         throw new IllegalArgumentException(s"Receieved invalid QOS value from broker: ${pMsg.getQos}")
       }
       val msg = MqttMessage(
+        topic = t,
         payload = pMsg.getPayload.toVector,
         qos = qos,
         retained = pMsg.isRetained,
         dup = pMsg.isDuplicate)
-      messageSubscriptions.notify((t, msg))
+      messageSubscriptions.notify(msg)
     }
 
   }

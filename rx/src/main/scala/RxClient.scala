@@ -56,19 +56,16 @@ trait RxClient[N[+_]] extends ClientModule[Observable, N]
       private[rx] val connection: connectionModule.MqttConnection,
       val status: Observable[ConnectionStatus]) {
 
-    private[this] val dataSubject = Subject[(Topic, MqttMessage)]
+    private[this] val dataSubject = Subject[MqttMessage]
 
-    connectionModule.attachMessageHandler(connection, { (topic, msg) =>
-      dataSubject.onNext((topic, msg))
-    })
+    connectionModule.attachMessageHandler(connection, dataSubject.onNext _)
 
     private[this] val connLock = new AnyRef {}
     private[this] var currentSubscriptions = Map[TopicPattern,Int]()
 
     def data(topics: Seq[TopicPattern]): Observable[MqttMessage] = {
 
-      val stream = dataSubject.filter { case (topic,msg) => topics.view.exists(_.matches(topic)) }
-                              .map(_._2)
+      val stream = dataSubject.filter { case msg => topics.view.exists(_.matches(msg.topic)) }
       stream.onSubscribe { subscribeTo(topics) }
             .onUnsubscribe { unsubscribeFrom(topics) }
     }
@@ -94,7 +91,7 @@ trait RxClient[N[+_]] extends ClientModule[Observable, N]
       }
     }
 
-    def data(): Observable[MqttMessage] = dataSubject.map(_._2)
+    def data(): Observable[MqttMessage] = dataSubject
   }
 
   implicit val sumIntMonoid: Monoid[Int] = new Monoid[Int] {

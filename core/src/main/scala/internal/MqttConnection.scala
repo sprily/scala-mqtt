@@ -38,7 +38,7 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
 
   type MqttConnection
   type HandlerToken <: HandlerTokenLike
-  type MessageHandler = (Topic, MqttMessage) => Unit
+  type MessageHandler = MqttMessage => Unit
   type ConnectionHandler = ConnectionStatus => Unit
 
   class InactiveConnectionException extends IllegalStateException("Active connection required")

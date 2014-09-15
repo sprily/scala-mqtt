@@ -181,9 +181,9 @@ class PahoMqttConnectionSpec extends FlatSpec
     Await.ready(client.initialiseConnection(), 1.seconds)
 
     var called = false
-    val token = client.attachMessageHandler { (topic, msg) =>
+    val token = client.attachMessageHandler { msg =>
       called = true
-      topic should equal (Topic("topic"))
+      msg.topic should equal (Topic("topic"))
       msg.payload should equal (List[Byte](0x00, 0x10))
       msg.qos should equal (AtLeastOnce)
       msg.retained should equal (false)
