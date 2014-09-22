@@ -403,6 +403,9 @@ class PahoMqttConnectionSpec extends FlatSpec
     def setUserContext(x$1: Any): Unit = ???
     def waitForCompletion(x$1: Long): Unit = ???
     def waitForCompletion(): Unit = ???
+    def getGrantedQos(): Array[Int] = ???
+    def getResponse = ???
+    def getSessionPresent = ???
   }
 
 }

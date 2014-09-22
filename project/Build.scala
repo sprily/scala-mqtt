@@ -11,16 +11,17 @@ object ScalaMqtt extends Build {
 
     resolvers ++= Seq(
       "TypeSafe Releases" at "http://repo.typesafe.com/typesafe/releases",
-      "spring"            at "http://repo.springsource.org/plugins-release"
+      "spring"            at "http://repo.springsource.org/plugins-release",
+      "sprily"            at "http://repo.sprily.co.uk/nexus/content/repositories/releases/"
     ),
 
     // Standardise some common dependencies.
     libraryDependencies ++= Seq(
-      "org.eclipse.paho"            % "mqtt-client"                 % "0.4.0",
       "com.typesafe.scala-logging"  % "scala-logging-slf4j_2.10"    % "2.1.2",
       "ch.qos.logback"              % "logback-classic"             % "1.1.2",
       "org.scalaz"                 %% "scalaz-core"                 % "7.0.6",
       "org.typelevel"              %% "scalaz-contrib-210"          % "0.1.5",
+      "uk.co.sprily"                % "org.eclipse.paho.client.mqttv3" % "1.0.0",
       "org.scalacheck"             %% "scalacheck"                  % "1.11.1"           % "test",
       "org.scalatest"               % "scalatest_2.10"              % "2.2.1"            % "test"
     ),
