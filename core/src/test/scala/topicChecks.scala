@@ -9,7 +9,6 @@ import org.scalacheck.Arbitrary.arbitrary
 object TopicChecks extends Properties("Topic") {
 
 
-  //"A Topic" should "match '#' wildcards" in (pending)
   property("symetric") = forAll { t: Topic =>
     t.pattern matches t
   }
@@ -26,7 +25,7 @@ object TopicChecks extends Properties("Topic") {
 
   /** Simple Topics without any wildcards */
   private[this] lazy val topicGen = for {
-    parts <- Gen.nonEmptyContainerOf[List, String](validTopicPart)
+    parts <- Gen.containerOf1[List, String](validTopicPart)
   } yield (Topic(parts.mkString("/")))
 
   private[this] lazy val validTopicPart = for {
@@ -39,7 +38,7 @@ object TopicChecks extends Properties("Topic") {
   }
 
   private[this] lazy val topicWithPlusWildcardsGen = for {
-    parts <- Gen.nonEmptyContainerOf[List, String](validTopicPartWithPlusWildcard)
+    parts <- Gen.containerOf1[List, String](validTopicPartWithPlusWildcard)
     pattern = TopicPattern(parts.mkString("/"))
     topic = Topic(parts.map {
         case "+" => "foobar"
@@ -48,7 +47,7 @@ object TopicChecks extends Properties("Topic") {
   } yield (pattern, topic)
 
   private[this] lazy val topicWithHashWildcardGen = for {
-    parts <- Gen.nonEmptyContainerOf[List, String](validTopicPart)
+    parts <- Gen.containerOf1[List, String](validTopicPart)
     i <- Gen.choose(0, parts.length)
     patternParts = parts.slice(0, i) ++ List("#")
     pattern = TopicPattern(patternParts.mkString("/"))

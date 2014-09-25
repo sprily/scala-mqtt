@@ -487,9 +487,5 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule
     }
   }
 
-  private[this] implicit def QosMonoid: Monoid[QoS] = new Monoid[QoS] {
-    def zero = AtMostOnce
-    def append(q1: QoS, q2: => QoS) = QoS(Math.max(q1.value, q2.value)).get
-  }
 
 }

@@ -20,8 +20,9 @@ object ScalaMqtt extends Build {
       "com.typesafe.scala-logging"  % "scala-logging-slf4j_2.10"    % "2.1.2",
       "ch.qos.logback"              % "logback-classic"             % "1.1.2",
       "org.scalaz"                 %% "scalaz-core"                 % "7.0.6",
+      "org.scalaz"                 %% "scalaz-scalacheck-binding"   % "7.0.6"            % "test",
       "org.typelevel"              %% "scalaz-contrib-210"          % "0.1.5",
-      "org.scalacheck"             %% "scalacheck"                  % "1.11.1"           % "test",
+      "org.scalacheck"             %% "scalacheck"                  % "1.10.1"           % "test",
       "org.scalatest"               % "scalatest_2.10"              % "2.2.1"            % "test"
     ),
 
