@@ -13,7 +13,6 @@ import com.typesafe.scalalogging.slf4j.StrictLogging
 import scalaz._
 import scalaz.syntax.monoid._
 import scalaz.std.map._
-import scalaz.contrib.std.scalaFuture._
 
 import org.eclipse.paho.client.{mqttv3 => paho}
 
