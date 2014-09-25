@@ -3,6 +3,8 @@ package mqtt
 
 import scala.language.higherKinds
 
+import scala.concurrent.Future
+
 /** A connection to an MQTT broker for subscribtion and publication of data.
   *
   * Data receieved from the broker, as well as status of the underlying TCP
@@ -23,7 +25,7 @@ import scala.language.higherKinds
   * initial call to [[uk.co.sprily.mqtt.Client.open()]].
   *
   */
-trait ClientModule[M[+_], N[+_]] {
+trait ClientModule[M[+_]] {
 
   type Client
 
@@ -31,7 +33,7 @@ trait ClientModule[M[+_], N[+_]] {
     *
     * This may fail if an initial connection cannot be made.
     */
-  def connect(options: MqttOptions): N[Client]
+  def connect(options: MqttOptions): Future[Client]
 
   /** Close the connection.
     *
@@ -39,7 +41,7 @@ trait ClientModule[M[+_], N[+_]] {
     * be re-opened again by calling
     * [[uk.co.sprily.mqtt.Client.open]].
     */
-  def disconnect(client: Client): N[Unit]
+  def disconnect(client: Client): Future[Unit]
 
   /** A stream of the changing connection status, ie online or offline.
     *
@@ -114,7 +116,7 @@ trait ClientModule[M[+_], N[+_]] {
               topic: Topic,
               payload: Array[Byte],
               qos: QoS = AtLeastOnce,
-              retain: Boolean = false): N[Unit]
+              retain: Boolean = false): Future[Unit]
 
 }
 

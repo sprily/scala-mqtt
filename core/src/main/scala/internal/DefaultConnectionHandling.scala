@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import util.AtomicOps
 
-protected[internal] trait DefaultConnectionHandling[M[+_]] { this: MqttConnectionModule[M] =>
+protected[internal] trait DefaultConnectionHandling { this: MqttConnectionModule =>
 
 
   class NotificationHandler[T] {

@@ -19,14 +19,13 @@ import org.eclipse.paho.client.{mqttv3 => paho}
 
 import util.AtomicOps
 
-protected[mqtt] object PahoMqttConnection extends PahoMqttConnectionModule
+protected[mqtt] object PahoMqttConnection extends PahoMqttConnectionModule {
+  override val ec = scala.concurrent.ExecutionContext.Implicits.global
+}
 
-protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule[Future]
-                                                  with DefaultConnectionHandling[Future]
+protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule
+                                                  with DefaultConnectionHandling
                                                   with StrictLogging { self =>
-
-  import scala.concurrent.ExecutionContext.Implicits.global
-  override implicit def M = implicitly[Monad[Future]]
 
   /** Module public interface **/
 

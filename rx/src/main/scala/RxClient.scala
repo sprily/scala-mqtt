@@ -3,6 +3,7 @@ package mqtt
 package rx
 
 import scala.language.higherKinds
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import com.typesafe.scalalogging.slf4j.StrictLogging
@@ -16,22 +17,19 @@ import scalaz.std.map._
 import scalaz.syntax.monad._
 import scalaz.syntax.foldable._
 import scalaz.syntax.monoid._
-import scalaz.contrib.std.scalaFuture._
 
 import util._
 
-object AsynxRxClient extends RxClient[Future] {
-  import scala.concurrent.ExecutionContext.Implicits.global
-  val N = implicitly[Monad[Future]]
+object AsyncRxClient extends RxClient {
+  val ec = scala.concurrent.ExecutionContext.Implicits.global
   protected lazy val connectionModule = mqtt.internal.PahoMqttConnection
 }
 
-trait RxClient[N[+_]] extends ClientModule[Observable, N]
-                         with StrictLogging {
+trait RxClient extends ClientModule[Observable]
+                  with StrictLogging {
 
-  implicit def N: Monad[N]
-
-  protected val connectionModule: mqtt.internal.MqttConnectionModule[N]
+  implicit val ec: ExecutionContext
+  protected val connectionModule: mqtt.internal.MqttConnectionModule
 
   override def connect(options: MqttOptions) = {
     val statusSubject = BehaviorSubject(ConnectionStatus(false))

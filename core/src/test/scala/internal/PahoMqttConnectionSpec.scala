@@ -14,7 +14,7 @@ class PahoMqttConnectionSpec extends FlatSpec
                                 with Matchers
                                 with PahoMqttConnectionModule {
 
-  import scala.concurrent.ExecutionContext.Implicits.global
+  override implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
 
   "A MqttConnection" should "simply connect and disconnect" in {
 

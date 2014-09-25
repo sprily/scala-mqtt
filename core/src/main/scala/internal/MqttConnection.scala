@@ -3,6 +3,9 @@ package mqtt
 package internal
 
 import scala.language.higherKinds
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import scalaz._
@@ -11,12 +14,6 @@ import scalaz.syntax.monad._
 /**
   * Abstracts over the underlying MQTT library, eg. paho.  The interface
   * is modelled on the paho MQTT client as that's the intended implementor.
-  *
-  * A mutable object by necessity since it handles the connection to the
-  * broker.  This is reflected in the type parameter `M`, which is
-  * interpretted to mean a monad capable of modelling failure.  The
-  * intended purpose of this is to describe both synchronous and asynchronous
-  * implementations (by `Try` and `Future` respectively).
   *
   * Connecting to a broker returns a `MqttConnection` which maintains the
   * underlying connection through unexpected disconnections.  ie - it should
@@ -32,9 +29,9 @@ import scalaz.syntax.monad._
   * The returned `MqttConnection` should be thread-safe.
   *
   */
-protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
+protected[mqtt] trait MqttConnectionModule { self =>
 
-  implicit def M: Monad[M]
+  implicit val ec: ExecutionContext
 
   type MqttConnection
   type HandlerToken <: HandlerTokenLike
@@ -61,7 +58,8 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
     * being initialised to avoid the race-condition.
     */
   def connectWithHandler(options: MqttOptions,
-                         callbacks: Seq[ConnectionHandler]): M[(MqttConnection, Seq[HandlerToken])]
+                         callbacks: Seq[ConnectionHandler])
+                        : Future[(MqttConnection, Seq[HandlerToken])]
 
   /**
     * Connect to the given broker, and maintain the connection
@@ -71,7 +69,7 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
     * attempt to maintain theunderlying connection.  *However*, if the
     * *initial* connection fails, no automatic re-attempts are made.
     */
-  def connect(options: MqttOptions): M[MqttConnection] = {
+  def connect(options: MqttOptions): Future[MqttConnection] = {
     connectWithHandler(options, Nil).map(_._1)
   }
 
@@ -85,7 +83,8 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
     * @throw InactiveConnection if `disconnect()` has already been called on
     * the given `MqttConnection`.
     */
-  def disconnect(conn: MqttConnection, quiesce: FiniteDuration = 30.seconds): M[Unit]
+  def disconnect(conn: MqttConnection,
+                 quiesce: FiniteDuration = 30.seconds): Future[Unit]
 
   /**
     * Publish a given payload to the given topic.
@@ -143,7 +142,7 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
               topic: Topic,
               payload: Seq[Byte],
               qos: QoS,
-              retained: Boolean): M[Unit]
+              retained: Boolean): Future[Unit]
 
   /**
     * Subscribe to the given topics.
@@ -170,8 +169,8 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
     * re-subscribe across unexpected connections.
     *
     */
-  def subscribe(conn: MqttConnection, to: Seq[(TopicPattern, QoS)]): M[Unit]
-  def subscribe(conn: MqttConnection, topics: Seq[TopicPattern], qos: QoS): M[Unit] = {
+  def subscribe(conn: MqttConnection, to: Seq[(TopicPattern, QoS)]): Future[Unit]
+  def subscribe(conn: MqttConnection, topics: Seq[TopicPattern], qos: QoS): Future[Unit] = {
     subscribe(conn, topics.map((_,qos)))
   }
 
@@ -192,7 +191,7 @@ protected[mqtt] trait MqttConnectionModule[M[+_]] { self =>
     * consider timing out on an asynchronous interface.
     *
     */
-  def unsubscribe(conn: MqttConnection, topics: Seq[TopicPattern]): M[Unit]
+  def unsubscribe(conn: MqttConnection, topics: Seq[TopicPattern]): Future[Unit]
 
   /**
     * Attach a callback to be notified of all incoming messages.
