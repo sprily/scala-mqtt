@@ -24,7 +24,6 @@ protected[mqtt] object PahoMqttConnection extends PahoMqttConnectionModule {
 }
 
 protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule
-                                                  with DefaultConnectionHandling
                                                   with StrictLogging { self =>
 
   /** Module public interface **/

@@ -34,17 +34,12 @@ protected[mqtt] trait MqttConnectionModule { self =>
   implicit val ec: ExecutionContext
 
   type MqttConnection
-  type HandlerToken <: HandlerTokenLike
   type MessageHandler = MqttMessage => Unit
   type ConnectionHandler = ConnectionStatus => Unit
 
   class InactiveConnectionException extends IllegalStateException("Active connection required")
   class ActiveConnectionException extends IllegalStateException("In-active connection required")
   class UnexpectedDisconnectionException(t: Throwable) extends java.io.IOException
-
-  trait HandlerTokenLike {
-    def cancel(): Unit
-  }
 
   /** 
     * Connect to the given broker, and maintain the connection
@@ -59,7 +54,7 @@ protected[mqtt] trait MqttConnectionModule { self =>
     */
   def connectWithHandler(options: MqttOptions,
                          callbacks: Seq[ConnectionHandler])
-                        : Future[(MqttConnection, Seq[HandlerToken])]
+                        : Future[(MqttConnection, Seq[CancellationToken])]
 
   /**
     * Connect to the given broker, and maintain the connection
@@ -196,13 +191,13 @@ protected[mqtt] trait MqttConnectionModule { self =>
   /**
     * Attach a callback to be notified of all incoming messages.
     */
-  def attachMessageHandler(conn: MqttConnection, callback: MessageHandler): HandlerToken
+  def attachMessageHandler(conn: MqttConnection, callback: MessageHandler): CancellationToken
 
   /**
     * Attach a callback to be notified of changes to the connection status
     * of the underlying connection.
     */
-  def attachConnectionHandler(conn: MqttConnection, callback: ConnectionHandler): HandlerToken
+  def attachConnectionHandler(conn: MqttConnection, callback: ConnectionHandler): CancellationToken
 
   /**
    * Infix operators delegate to module functions.
