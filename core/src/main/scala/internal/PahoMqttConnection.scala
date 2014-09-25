@@ -422,9 +422,9 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule
   protected trait RestrictedPahoInterface {
     def close(): Unit
     def connect(options: paho.MqttConnectOptions,
-                listener: paho.IMqttActionListener): paho.IMqttToken    // TODO: don't return token
+                listener: paho.IMqttActionListener): Unit
     def disconnect(quiesce: Long,
-                   listener: paho.IMqttActionListener): paho.IMqttToken
+                   listener: paho.IMqttActionListener): Unit
     def setCallback(cb: paho.MqttCallback): Unit
     def subscribe(topics: Seq[String],
                   qos: Seq[Int],

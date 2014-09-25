@@ -335,16 +335,14 @@ class PahoMqttConnectionSpec extends FlatSpec
   val defaultOptions = MqttOptions.cleanSession()
 
   trait FakeClientHelpers {
-    protected def succeedListener(listener: paho.IMqttActionListener,
-                                  token: paho.IMqttToken = new FakeMqttToken()) = {
-      listener.onSuccess(token)
-      token
+    protected def succeedListener(listener: paho.IMqttActionListener) = {
+      listener.onSuccess(new FakeMqttToken())
     }
 
-    protected def failListener(listener: paho.IMqttActionListener,
-                               token: paho.IMqttToken = new FakeMqttToken()) = {
-      listener.onFailure(token, new java.io.IOException("something went wrong"))
-      token
+    protected def failListener(listener: paho.IMqttActionListener) = {
+      listener.onFailure(
+        new FakeMqttToken(),
+        new java.io.IOException("something went wrong"))
     }
   }
 
@@ -380,9 +378,9 @@ class PahoMqttConnectionSpec extends FlatSpec
     def close(): Unit = { }
     def isConnected(): Boolean = connected
     def connect(options: paho.MqttConnectOptions,
-                l: paho.IMqttActionListener): paho.IMqttToken
+                l: paho.IMqttActionListener): Unit
     def disconnect(quiesce: Long,
-                   l: paho.IMqttActionListener): paho.IMqttToken
+                   l: paho.IMqttActionListener): Unit
     def setCallback(cb: paho.MqttCallback): Unit = { }
     def subscribe(topics: Seq[String],
                   qos: Seq[Int],
