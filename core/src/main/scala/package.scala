@@ -6,4 +6,6 @@ package object mqtt {
   type Seq[+A] = scala.collection.immutable.Seq[A]
   val Seq = scala.collection.immutable.Seq
 
+  // continuation
+  type Cont[+A] = (A => Unit) => Unit
 }
