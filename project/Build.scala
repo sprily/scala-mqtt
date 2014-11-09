@@ -3,8 +3,14 @@ import Keys._
 
 object ScalaMqtt extends Build {
 
+  def scalazContribDependency(scalaVersion: String) = scalaVersion match {
+    case "2.10.3" => "org.typelevel" %% "scalaz-contrib-210" % "0.1.5"
+    case "2.11.2" => "org.typelevel" %% "scalaz-contrib-210" % "0.2"
+  }
+
   lazy val globalSettings = Defaults.defaultSettings ++ Seq(
-    scalaVersion in ThisBuild := "2.10.3",
+    scalaVersion in ThisBuild := "2.11.2",
+    crossScalaVersions in ThisBuild := Seq("2.10.3", "2.11.2"),
     organization in ThisBuild := "uk.co.sprily",
     version in ThisBuild := "0.1-SNAPSHOT",
     scalacOptions in ThisBuild ++= Seq("-deprecation", "-unchecked", "-feature"),
@@ -17,14 +23,16 @@ object ScalaMqtt extends Build {
     // Standardise some common dependencies.
     libraryDependencies ++= Seq(
       "org.eclipse.paho"            % "mqtt-client"                 % "0.4.0",
-      "com.typesafe.scala-logging"  % "scala-logging-slf4j_2.10"    % "2.1.2",
+      "com.typesafe.scala-logging" %% "scala-logging-slf4j"         % "2.1.2",
       "ch.qos.logback"              % "logback-classic"             % "1.1.2",
       "org.scalaz"                 %% "scalaz-core"                 % "7.0.6",
       "org.scalaz"                 %% "scalaz-scalacheck-binding"   % "7.0.6"            % "test",
-      "org.typelevel"              %% "scalaz-contrib-210"          % "0.1.5",
+      //"org.typelevel"              %% "scalaz-contrib-210"          % "0.1.5",
       "org.scalacheck"             %% "scalacheck"                  % "1.10.1"           % "test",
-      "org.scalatest"               % "scalatest_2.10"              % "2.2.1"            % "test"
+      "org.scalatest"              %% "scalatest"                   % "2.2.1"            % "test"
     ),
+
+    libraryDependencies <+= scalaVersion(scalazContribDependency(_)),
 
     testOptions in Test := Seq(Tests.Filter(unitTestFilter)),
     testOptions in IntegrationTest := Seq(Tests.Filter(integrationTestFilter)),
