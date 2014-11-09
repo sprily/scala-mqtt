@@ -54,7 +54,18 @@ trait SimpleClient extends ClientModule[Cont]
     })
   }
 
-  override def publish(client: Client, topic: Topic, payload: Array[Byte], qos: QoS, retain: Boolean = false) = ???
+  override def publish(client: Client,
+                       topic: Topic,
+                       payload: Array[Byte],
+                       qos: QoS,
+                       retain: Boolean = false) = {
+    connectionModule.publish(
+      client.connection,
+      topic,
+      payload.toVector,
+      qos,
+      retain)
+  }
 
   case class Client(
       private[mqtt] val connection: connectionModule.MqttConnection,
