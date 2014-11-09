@@ -1,6 +1,5 @@
 package uk.co.sprily
 package mqtt
-package rx
 
 import scala.language.higherKinds
 import scala.concurrent.ExecutionContext
@@ -17,10 +16,6 @@ import scalaz.syntax.monoid._
 
 import util._
 
-object C {
-  type Cont[+A] = (A => Unit) => Unit
-}
-
 object Main {
   import scala.concurrent.Await
   import scala.concurrent.duration._
@@ -35,10 +30,8 @@ object AsyncContClient extends ContClient {
   protected lazy val connectionModule = mqtt.internal.PahoMqttConnection
 }
 
-trait ContClient extends ClientModule[C.Cont]
+trait ContClient extends ClientModule[Cont]
                     with StrictLogging {
-
-  import C.Cont
 
   protected implicit val ec: ExecutionContext
   protected val connectionModule: mqtt.internal.MqttConnectionModule
@@ -69,6 +62,6 @@ trait ContClient extends ClientModule[C.Cont]
 
   override def publish(client: Client, topic: Topic, payload: Array[Byte], qos: QoS, retain: Boolean = false) = ???
 
-  case class Client(private[rx] val connection: connectionModule.MqttConnection)
+  case class Client(private[mqtt] val connection: connectionModule.MqttConnection)
 
 }
