@@ -1,50 +1,44 @@
 package uk.co.sprily
 package mqtt
 
+import java.util.concurrent.atomic.AtomicReference
+
 import scala.language.higherKinds
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import com.typesafe.scalalogging.slf4j.StrictLogging
 
-import scalaz._
-import scalaz.std.list._
-import scalaz.std.map._
-import scalaz.syntax.monad._
-import scalaz.syntax.foldable._
-import scalaz.syntax.monoid._
+import internal.util._
 
-import util._
-
-object Main {
-  import scala.concurrent.Await
-  import scala.concurrent.duration._
-  val client = Await.result(AsyncContClient.connect(MqttOptions.cleanSession()), 3.seconds)
-  val cont = AsyncContClient.data(client)
-
-  cont { msg => println(msg) }
-}
-
-object AsyncContClient extends ContClient {
+object AsyncSimpleClient extends SimpleClient {
   val ec = scala.concurrent.ExecutionContext.Implicits.global
   protected lazy val connectionModule = mqtt.internal.PahoMqttConnection
 }
 
-trait ContClient extends ClientModule[Cont]
-                    with StrictLogging {
+trait SimpleClient extends ClientModule[Cont]
+                     with AtomicImplicits
+                     with StrictLogging {
 
   protected implicit val ec: ExecutionContext
   protected val connectionModule: mqtt.internal.MqttConnectionModule
 
   override def connect(options: MqttOptions) = {
-    connectionModule.connect(options).map(new Client(_))
+    val status = new AtomicReference(ConnectionStatus(false))
+    val handler = { newStatus: ConnectionStatus =>
+      status.update { _ => newStatus }
+      ()
+    }
+    connectionModule.connectWithHandler(options, List(handler)).map {
+      case (conn, _) => new Client(conn, status)
+    }
   }
 
   override def disconnect(client: Client) = connectionModule.disconnect(client.connection)
 
-  override def status(client: Client): Cont[ConnectionStatus] = {
-    ???
-    //client.status
+  override def status(client: Client): Cont[ConnectionStatus] = { f =>
+    f(client.status.get())
+    connectionModule.attachConnectionHandler(client.connection, f)
   }
 
   override def data(client: Client): Cont[MqttMessage] = { f =>
@@ -62,6 +56,9 @@ trait ContClient extends ClientModule[Cont]
 
   override def publish(client: Client, topic: Topic, payload: Array[Byte], qos: QoS, retain: Boolean = false) = ???
 
-  case class Client(private[mqtt] val connection: connectionModule.MqttConnection)
+  case class Client(
+      private[mqtt] val connection: connectionModule.MqttConnection,
+      private[mqtt] val status: AtomicReference[ConnectionStatus]
+  )
 
 }
