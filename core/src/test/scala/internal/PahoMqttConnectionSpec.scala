@@ -387,6 +387,11 @@ class PahoMqttConnectionSpec extends FlatSpec
                   listener: paho.IMqttActionListener) = { }
     def unsubscribe(topics: Seq[String],
                     listener: paho.IMqttActionListener) = { }
+    def publish(topic: Topic,
+                payload: Seq[Byte],
+                qos: QoS,
+                retain: Boolean,
+                listener: paho.IMqttActionListener) = { }
   }
 
   class FakeMqttToken extends paho.IMqttToken {

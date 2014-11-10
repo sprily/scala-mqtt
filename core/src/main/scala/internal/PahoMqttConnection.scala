@@ -132,7 +132,27 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule
     def publish(topic: Topic,
                 payload: Seq[Byte],
                 qos: QoS,
-                retained: Boolean) = ???
+                retained: Boolean) = {
+      logger.debug(s"Attempting to publish to ${topic}.  Awaiting lock first.")
+      connLock.synchronized {
+        if (!active) {
+          logger.warn("Unable to publish since connection is inactive")
+          Future.failed(new ActiveConnectionException())
+        } else {
+          logger.debug("Attempting to publish")
+          try {
+            val p = promise[Unit]
+            client.publish( topic, payload, qos, retained, promiseAL(p))
+            p.future
+          } catch {
+            case e: Exception => {
+              logger.warn(s"Error occurred attempting publish: ${e}")
+              Future.failed(e)
+            }
+          }
+        }
+      }
+    }
 
     def subscribe(to: Seq[(TopicPattern, QoS)]): Future[Unit] = {
       logger.debug(s"Attempting to subscribe to: ${to}.  Awaiting lock first.")
@@ -431,6 +451,11 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule
                   listener: paho.IMqttActionListener): Unit
     def unsubscribe(topics: Seq[String],
                     listener: paho.IMqttActionListener): Unit
+    def publish(topic: Topic,
+                payload: Seq[Byte],
+                qos: QoS,
+                retain: Boolean,
+                listener: paho.IMqttActionListener): Unit
   }
 
   /**
@@ -452,6 +477,13 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule
     }
     def unsubscribe(topics: Seq[String], listener: paho.IMqttActionListener) = {
       c.unsubscribe(topics.toArray, null , listener)
+    }
+    def publish(topic: Topic,
+                payload: Seq[Byte],
+                qos: QoS,
+                retain: Boolean,
+                listener: paho.IMqttActionListener) = {
+      c.publish(topic.path, payload.toArray, qos.value, retain, null, listener)
     }
   }
 
