@@ -25,7 +25,7 @@ import scala.concurrent.Future
   * initial call to [[uk.co.sprily.mqtt.Client.open()]].
   *
   */
-trait ClientModule[M[+_]] {
+ trait ClientModule[M[+_]] { self =>
 
   type Client
 
@@ -117,6 +117,19 @@ trait ClientModule[M[+_]] {
               payload: Array[Byte],
               qos: QoS = AtLeastOnce,
               retain: Boolean = false): Future[Unit]
+
+
+  implicit class ClientOps(c: Client) {
+    def disconnect(): Future[Unit] = self.disconnect(c)
+    def status(): M[ConnectionStatus] = self.status(c)
+    def data(): M[MqttMessage] = self.data(c)
+    def data(topic: TopicPattern): M[MqttMessage] = self.data(c, topic)
+    def data(t: TopicPattern, ts: TopicPattern*): M[MqttMessage] = self.data(c, t, ts:_*)
+    def publish(topic: Topic,
+                payload: Array[Byte],
+                qos: QoS = AtLeastOnce,
+                retain: Boolean = false) = self.publish(c,topic,payload,qos,retain)
+  }
 
 }
 
