@@ -26,8 +26,8 @@ object ScalaMqtt extends Build {
       "org.eclipse.paho"            % "org.eclipse.paho.client.mqttv3" % "1.0.1",
       "com.typesafe.scala-logging" %% "scala-logging-slf4j"         % "2.1.2",
       "ch.qos.logback"              % "logback-classic"             % "1.1.2",
-      "org.scalaz"                 %% "scalaz-core"                 % "7.0.6",
-      "org.scalaz"                 %% "scalaz-scalacheck-binding"   % "7.0.6"            % "test",
+      "org.scalaz"                 %% "scalaz-core"                 % "7.1.0",
+      "org.scalaz"                 %% "scalaz-scalacheck-binding"   % "7.1.0"            % "test",
       "org.scalacheck"             %% "scalacheck"                  % "1.10.1"           % "test",
       "org.scalatest"              %% "scalatest"                   % "2.2.1"            % "test"
     ),
