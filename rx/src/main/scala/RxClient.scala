@@ -52,7 +52,7 @@ trait RxClient extends ClientModule[Observable]
 
   class Client(
       private[rx] val connection: connectionModule.MqttConnection,
-      val status: Observable[ConnectionStatus]) {
+      val connectionStatus: Observable[ConnectionStatus]) extends ClientLike {
 
     private[this] val dataSubject = Subject[MqttMessage]
 
@@ -97,7 +97,7 @@ trait RxClient extends ClientModule[Observable]
       }
     }
 
-    def data(): Observable[MqttMessage] = dataSubject
+    override def data(): Observable[MqttMessage] = dataSubject
   }
 
   implicit val sumIntMonoid: Monoid[Int] = new Monoid[Int] {

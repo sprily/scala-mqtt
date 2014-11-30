@@ -37,7 +37,7 @@ trait SimpleClient extends ClientModule[Cont]
   override def disconnect(client: Client) = connectionModule.disconnect(client.connection)
 
   override def status(client: Client): Cont[ConnectionStatus] = { f =>
-    f(client.status.get())
+    f(client.connectionStatus.get())
     connectionModule.attachConnectionHandler(client.connection, f)
   }
 
@@ -69,7 +69,7 @@ trait SimpleClient extends ClientModule[Cont]
 
   case class Client(
       private[mqtt] val connection: connectionModule.MqttConnection,
-      private[mqtt] val status: AtomicReference[ConnectionStatus]
-  )
+      private[mqtt] val connectionStatus: AtomicReference[ConnectionStatus]
+  ) extends ClientLike
 
 }

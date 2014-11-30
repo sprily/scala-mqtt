@@ -27,7 +27,7 @@ import scala.concurrent.Future
   */
  trait ClientModule[M[+_]] { self =>
 
-  type Client
+  type Client <: ClientLike
 
   /** Open the connection.
     *
@@ -119,17 +119,16 @@ import scala.concurrent.Future
               retain: Boolean = false): Future[Unit]
 
 
-  implicit class ClientOps(c: Client) {
-    def disconnect(): Future[Unit] = self.disconnect(c)
-    def status(): M[ConnectionStatus] = self.status(c)
-    def data(): M[MqttMessage] = self.data(c)
-    def data(topic: TopicPattern): M[MqttMessage] = self.data(c, topic)
-    def data(t: TopicPattern, ts: TopicPattern*): M[MqttMessage] = self.data(c, t, ts:_*)
+  trait ClientLike { this: Client =>
+    def disconnect(): Future[Unit] = self.disconnect(this)
+    def status(): M[ConnectionStatus] = self.status(this)
+    def data(): M[MqttMessage] = self.data(this)
+    def data(topic: TopicPattern): M[MqttMessage] = self.data(this, topic)
+    def data(t: TopicPattern, ts: TopicPattern*): M[MqttMessage] = self.data(this, t, ts:_*)
     def publish(topic: Topic,
                 payload: Array[Byte],
                 qos: QoS = AtLeastOnce,
-                retain: Boolean = false) = self.publish(c,topic,payload,qos,retain)
+                retain: Boolean = false) = self.publish(this,topic,payload,qos,retain)
   }
 
 }
-
