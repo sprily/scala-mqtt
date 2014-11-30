@@ -3,11 +3,6 @@ import Keys._
 
 object ScalaMqtt extends Build {
 
-  def scalazContribDependency(scalaVersion: String) = scalaVersion match {
-    case "2.10.3" => "org.typelevel" %% "scalaz-contrib-210" % "0.1.5"
-    case "2.11.2" => "org.typelevel" %% "scalaz-contrib-210" % "0.2"
-  }
-
   lazy val globalSettings = Defaults.defaultSettings ++ Seq(
     scalaVersion in ThisBuild := "2.11.2",
     crossScalaVersions in ThisBuild := Seq("2.10.3", "2.11.2"),
@@ -31,8 +26,6 @@ object ScalaMqtt extends Build {
       "org.scalacheck"             %% "scalacheck"                  % "1.10.1"           % "test",
       "org.scalatest"              %% "scalatest"                   % "2.2.1"            % "test"
     ),
-
-    libraryDependencies <+= scalaVersion(scalazContribDependency(_)),
 
     testOptions in Test := Seq(Tests.Filter(unitTestFilter)),
     testOptions in IntegrationTest := Seq(Tests.Filter(integrationTestFilter)),
