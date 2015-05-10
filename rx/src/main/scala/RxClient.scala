@@ -6,7 +6,7 @@ import scala.language.higherKinds
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
-import com.typesafe.scalalogging.slf4j.StrictLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import _root_.rx.lang.scala.{Observable, Subject}
 import _root_.rx.lang.scala.subjects.BehaviorSubject
@@ -26,7 +26,7 @@ object AsyncRxClient extends RxClient {
 }
 
 trait RxClient extends ClientModule[Observable]
-                  with StrictLogging {
+                  with LazyLogging {
 
   implicit val ec: ExecutionContext
   protected val connectionModule: mqtt.internal.MqttConnectionModule
