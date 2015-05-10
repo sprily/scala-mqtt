@@ -29,10 +29,17 @@ protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule
 
   override def connectWithHandler(options: MqttOptions,
                                   callbacks: Seq[ConnectionHandler]) = {
+
+    val pahoPersistence = options.persistence match {
+      case InMemory             => new paho.persist.MemoryPersistence()
+      case FilePersistence(dir) => new paho.persist.MqttDefaultFilePersistence(dir)
+    }
+
     val client = new MqttConnection(
                   new RestrictedPahoInterfaceImpl(
                     new paho.MqttAsyncClient(s"${options.url}:${options.port}",
-                                             options.clientId.s)),
+                                             options.clientId.s,
+                                             pahoPersistence)),
                   options.pahoConnectOptions)
     val tokens = callbacks.map(client.attachConnectionHandler(_))
 
