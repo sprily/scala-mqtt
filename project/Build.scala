@@ -7,7 +7,7 @@ object ScalaMqtt extends Build {
     scalaVersion in ThisBuild := "2.11.6",
     //crossScalaVersions in ThisBuild := Seq("2.10.3", "2.11.2"),   // scala-logging is 2.11 only
     organization in ThisBuild := "uk.co.sprily",
-    version in ThisBuild := "0.1.1-SNAPSHOT",
+    version in ThisBuild := "0.1.2",
     scalacOptions in ThisBuild ++= Seq("-deprecation", "-unchecked", "-feature"),
 
     resolvers ++= Seq(
@@ -33,7 +33,7 @@ object ScalaMqtt extends Build {
     parallelExecution in IntegrationTest := false,
 
     publishTo := {
-      val nexus = "http://repo.sprily.co.uk/nexus/"
+      val nexus = "https://repo.sprily.co.uk/nexus/"
       if (version.value.trim.endsWith("SNAPSHOT"))
         Some("snapshots" at nexus + "content/repositories/snapshots")
       else
