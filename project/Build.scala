@@ -4,10 +4,10 @@ import Keys._
 object ScalaMqtt extends Build {
 
   lazy val globalSettings = Defaults.defaultSettings ++ Seq(
-    scalaVersion in ThisBuild := "2.11.2",
-    crossScalaVersions in ThisBuild := Seq("2.10.3", "2.11.2"),
+    scalaVersion in ThisBuild := "2.11.6",
+    //crossScalaVersions in ThisBuild := Seq("2.10.3", "2.11.2"),   // scala-logging is 2.11 only
     organization in ThisBuild := "uk.co.sprily",
-    version in ThisBuild := "0.1-SNAPSHOT",
+    version in ThisBuild := "0.1.0",
     scalacOptions in ThisBuild ++= Seq("-deprecation", "-unchecked", "-feature"),
 
     resolvers ++= Seq(
@@ -19,7 +19,8 @@ object ScalaMqtt extends Build {
     // Standardise some common dependencies.
     libraryDependencies ++= Seq(
       "org.eclipse.paho"            % "org.eclipse.paho.client.mqttv3" % "1.0.1",
-      "com.typesafe.scala-logging" %% "scala-logging-slf4j"         % "2.1.2",
+      "com.typesafe.scala-logging" %% "scala-logging"               % "3.1.0",
+      "ch.qos.logback"              % "logback-core"                % "1.1.2",
       "ch.qos.logback"              % "logback-classic"             % "1.1.2",
       "org.scalaz"                 %% "scalaz-core"                 % "7.1.0",
       "org.scalaz"                 %% "scalaz-scalacheck-binding"   % "7.1.0"            % "test",

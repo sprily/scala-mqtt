@@ -7,7 +7,7 @@ import scala.language.higherKinds
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
-import com.typesafe.scalalogging.slf4j.StrictLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import internal.util._
 
@@ -18,7 +18,7 @@ object AsyncSimpleClient extends SimpleClient {
 
 trait SimpleClient extends ClientModule[Cont]
                      with AtomicImplicits
-                     with StrictLogging {
+                     with LazyLogging {
 
   protected implicit val ec: ExecutionContext
   protected val connectionModule: mqtt.internal.MqttConnectionModule

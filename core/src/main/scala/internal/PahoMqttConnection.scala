@@ -8,7 +8,7 @@ import scala.concurrent.{Future, future, Promise, promise}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
-import com.typesafe.scalalogging.slf4j.StrictLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import scalaz._
 import scalaz.syntax.monoid._
@@ -23,7 +23,7 @@ protected[mqtt] object PahoMqttConnection extends PahoMqttConnectionModule {
 }
 
 protected[mqtt] trait PahoMqttConnectionModule extends MqttConnectionModule
-                                                  with StrictLogging { self =>
+                                                  with LazyLogging { self =>
 
   /** Module public interface **/
 

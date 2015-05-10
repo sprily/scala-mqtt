@@ -5,11 +5,11 @@ package util
 
 import scala.util.control.ControlThrowable
 
-import com.typesafe.scalalogging.slf4j.StrictLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import _root_.rx.lang.scala.{Observable, Subscription}
 
-trait ObservableImplicits extends StrictLogging {
+trait ObservableImplicits extends LazyLogging {
 
   implicit class ObservableExtensions[T](source: Observable[T]) {
 
