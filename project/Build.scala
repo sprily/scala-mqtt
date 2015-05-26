@@ -45,7 +45,7 @@ object ScalaMqtt extends Build {
   lazy val root      = Project(id        = "scala-mqtt",
                                base      = file("."),
                                settings  = globalSettings,
-                               aggregate = Seq(core, rx))
+                               aggregate = Seq(core, rx, logback))
                          .configs(IntegrationTest)
 
   lazy val core      = Project(id        = "scala-mqtt-core",
@@ -61,6 +61,13 @@ object ScalaMqtt extends Build {
                                  )
                                )).configs(IntegrationTest)
                                  .dependsOn(core)
+
+  lazy val logback   = Project(id        = "scala-mqtt-logback",
+                               base      = file("logback"),
+                               settings  = globalSettings)
+                         .configs(IntegrationTest)
+                         .dependsOn(core)
+                         
 
   lazy val IntegrationTest = config("it") extend(Test)
   def unitTestFilter(name: String): Boolean = ! integrationTestFilter(name)
